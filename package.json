@@ -1,0 +1,12 @@
+{
+  "name": "aws-archify",
+  "version": "1.0.0",
+  "description": "AWS Reference Architecture diagrams from a JSON spec: a print-ready PNG and an interactive signal-flow viewer from one source",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "aws-archify": "skills/aws-archify/bin/aws-archify.mjs" },
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node test/run.mjs" },
+  "keywords": ["aws", "architecture", "diagram", "agent-skill", "claude", "reference-architecture"],
+  "files": ["skills/", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]
+}

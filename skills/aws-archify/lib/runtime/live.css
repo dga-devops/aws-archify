@@ -1,0 +1,214 @@
+/*
+ * live.css — the interactive layer.
+ *
+ * Rule that shapes everything here: the animation must FINISH in exactly the
+ * state the static PNG shows. Motion is finite (one pass), never a loop, and
+ * every animated property returns to its authored value. A reader who arrives
+ * late, prints the page, or has reduced motion on sees the same diagram.
+ */
+
+/* ---------- trace animation ---------- */
+
+/* A signal running along the wire, then settling. Adapted from the edge-flow
+ * treatment in archify (MIT) — see THIRD_PARTY_NOTICES.md. */
+@keyframes aa-edge-flow {
+  0%   { stroke-dasharray: 10 8; stroke-dashoffset: 54; opacity: .35; }
+  85%  { stroke-dasharray: 10 8; stroke-dashoffset: 0;  opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes aa-packet {
+  0%        { opacity: 0; offset-distance: 0%; }
+  8%        { opacity: 1; }
+  86%       { opacity: 1; offset-distance: 100%; }
+  100%      { opacity: 0; offset-distance: 100%; }
+}
+
+@keyframes aa-node-arrive {
+  0%   { transform: scale(1); filter: none; }
+  45%  { transform: scale(1.045); filter: drop-shadow(0 0 10px rgba(237,113,0,.55)); }
+  100% { transform: scale(1); filter: none; }
+}
+
+@keyframes aa-badge-pop {
+  0%   { transform: scale(.4); opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes aa-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* `playing` is added by live.js and removed when the pass ends, so the final
+ * DOM carries no animation state at all. */
+html[data-motion="playing"] [data-animate="edge"] {
+  animation: aa-edge-flow var(--dur, 2400ms) linear 1;
+  animation-delay: calc(var(--step, 0) * var(--stagger, 160ms));
+}
+html[data-motion="playing"] [data-animate="edge-label"],
+html[data-motion="playing"] .aa-packet {
+  animation: aa-fade-in 420ms ease-out 1;
+  animation-delay: calc(var(--step, 0) * var(--stagger, 160ms) + 240ms);
+  animation-fill-mode: backwards;
+}
+html[data-motion="playing"] .aa-packet {
+  animation: aa-packet var(--dur, 2400ms) linear 1;
+  animation-delay: calc(var(--step, 0) * var(--stagger, 160ms));
+  animation-fill-mode: backwards;
+}
+html[data-motion="playing"] .node img {
+  animation: aa-node-arrive 700ms ease-out 1;
+  animation-delay: calc(var(--step, 0) * var(--stagger, 160ms) + var(--dur, 2400ms) * .7);
+}
+html[data-motion="playing"] .num.on-canvas {
+  animation: aa-badge-pop 460ms cubic-bezier(.2, 1.4, .4, 1) 1;
+  animation-delay: calc(var(--step, 0) * var(--stagger, 160ms) + var(--dur, 2400ms) * .72);
+  animation-fill-mode: backwards;
+}
+
+/* The travelling signal dot. Only exists while the live layer is on. */
+.aa-packet {
+  position: absolute;
+  top: 0; left: 0;
+  width: 9px; height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--packet, #ED7100);
+  box-shadow: 0 0 9px 2px rgba(237, 113, 0, .5);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  offset-rotate: 0deg;
+}
+
+/* ---------- focus & route ---------- */
+
+/* Dimming is opacity-only: nothing moves, so the reader never loses their place. */
+html[data-focus] .node,
+html[data-focus] .arrow-label,
+html[data-focus] #diagram-edges [data-animate="edge"],
+html[data-focus] .num.on-canvas {
+  opacity: .16;
+  transition: opacity .18s ease;
+}
+html[data-focus] .node.aa-lit,
+html[data-focus] .arrow-label.aa-lit,
+html[data-focus] #diagram-edges [data-animate="edge"].aa-lit,
+html[data-focus] .num.on-canvas.aa-lit {
+  opacity: 1;
+}
+html[data-focus] .node.aa-seed img {
+  filter: drop-shadow(0 0 0 2px #ED7100) drop-shadow(0 0 14px rgba(237, 113, 0, .6));
+}
+#diagram-edges [data-animate="edge"].aa-lit {
+  stroke-width: 3.5;
+}
+
+/* ---------- dark theme ---------- */
+
+html[data-theme="dark"] body {
+  background: #16191F;
+  color: #E9EDF1;
+}
+html[data-theme="dark"] .title-rule { border-top-color: #5A6572; }
+html[data-theme="dark"] .callout-panel { background: #1F252E; }
+html[data-theme="dark"] .panel-note,
+html[data-theme="dark"] .node .label small,
+html[data-theme="dark"] .node .label .mono,
+html[data-theme="dark"] .footer-note { color: #9AA6B2; }
+html[data-theme="dark"] .num { background: #E9EDF1; color: #16191F; }
+html[data-theme="dark"] .num.new { background: #ED7100; color: #16191F; }
+html[data-theme="dark"] .arrow-label { background: #16191F; color: #B6C0CB; }
+html[data-theme="dark"] .grp-cloud { border-color: #8794A3; }
+/* Official AWS icons are drawn for a light ground; a soft plate keeps them
+ * legible on dark without altering brand colours. */
+html[data-theme="dark"] .node img,
+html[data-theme="dark"] .grp .grp-icon {
+  background: #EDF0F3;
+  border-radius: 6px;
+  padding: 3px;
+}
+html[data-theme="dark"] #diagram-edges [data-animate="edge"][stroke="#232F3E"] {
+  stroke: #C6D0DA;
+}
+html[data-theme="dark"] .aa-toolbar { background: #262D38; border-color: #3A4450; color: #E9EDF1; }
+html[data-theme="dark"] .aa-toolbar button { color: #E9EDF1; }
+html[data-theme="dark"] .aa-toolbar button:hover { background: #333C49; }
+html[data-theme="dark"] .aa-hint { background: #262D38; color: #C6D0DA; border-color: #3A4450; }
+
+/* ---------- viewer chrome ---------- */
+
+.aa-toolbar {
+  position: fixed;
+  bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px;
+  background: #FFFFFF;
+  border: 1px solid #D5DBDB;
+  border-radius: 999px;
+  box-shadow: 0 6px 22px rgba(35, 47, 62, .18);
+  padding: 5px 7px;
+  z-index: 200;
+  font: 500 13px/1 "Segoe UI", system-ui, sans-serif;
+}
+.aa-toolbar button {
+  appearance: none;
+  border: 0; background: transparent; color: #232F3E;
+  padding: 8px 12px; border-radius: 999px; cursor: pointer;
+  font: inherit;
+}
+.aa-toolbar button:hover { background: #F2F3F3; }
+.aa-toolbar button[aria-pressed="true"] { background: #ED7100; color: #FFFFFF; }
+.aa-toolbar .aa-sep { width: 1px; height: 20px; background: #D5DBDB; margin: 0 4px; }
+
+.aa-hint {
+  position: fixed;
+  bottom: 68px; left: 50%;
+  transform: translateX(-50%);
+  background: #FFFFFF;
+  border: 1px solid #D5DBDB;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: 400 13px/1.5 "Segoe UI", system-ui, sans-serif;
+  color: #545B64;
+  box-shadow: 0 4px 16px rgba(35, 47, 62, .14);
+  z-index: 200;
+  max-width: 620px;
+}
+.aa-hint kbd {
+  font: 600 12px/1 ui-monospace, Consolas, monospace;
+  background: #F2F3F3; border: 1px solid #D5DBDB; border-bottom-width: 2px;
+  border-radius: 4px; padding: 2px 5px; margin: 0 2px; color: #232F3E;
+}
+
+/* The page is a fixed 1920x1080 canvas; let the viewport scale it down. */
+html[data-live] { width: auto; height: auto; overflow: auto; background: #E9EDF1; }
+html[data-live][data-theme="dark"] { background: #0E1116; }
+html[data-live] body {
+  transform-origin: top left;
+  transform: scale(var(--fit, 1));
+  margin: 0 auto;
+}
+
+/* ---------- accessibility & print ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-motion="playing"] *,
+  html[data-motion="playing"] *::before,
+  html[data-motion="playing"] *::after {
+    animation: none !important;
+  }
+  .aa-packet { display: none; }
+}
+
+@media print {
+  .aa-toolbar, .aa-hint, .aa-packet { display: none !important; }
+  html[data-live] { background: #FFFFFF; }
+  html[data-live] body { transform: none; }
+  html[data-focus] .node,
+  html[data-focus] .arrow-label,
+  html[data-focus] #diagram-edges [data-animate="edge"],
+  html[data-focus] .num.on-canvas { opacity: 1 !important; }
+}

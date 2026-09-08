@@ -1,0 +1,39 @@
+{
+  "title": "Example Web Application — Request Path (Production)",
+  "reviewed": "September 2026",
+  "notes": "Fictional example. Region and account values are placeholders.",
+
+  "groups": [
+    { "kind": "cloud", "label": "AWS Cloud — example-prod (000000000000)", "at": [140, 205], "size": [1270, 470] },
+    { "kind": "region", "label": "eu-west-1", "at": [450, 250], "size": [935, 400] },
+    { "kind": "vpc", "label": "VPC — 10.0.0.0/16", "at": [485, 295], "size": [875, 310] },
+    { "kind": "public", "label": "Public subnet", "at": [510, 340], "size": [215, 230] },
+    { "kind": "private", "label": "Private subnet", "at": [745, 340], "size": [215, 230] },
+    { "kind": "private", "label": "Data subnet", "at": [980, 340], "size": [240, 230] }
+  ],
+
+  "nodes": [
+    { "id": "users", "icon": "users", "label": "End users", "at": [30, 430], "width": 100, "size": 72 },
+    { "id": "cf", "icon": "Amazon CloudFront", "label": "Amazon CloudFront", "at": [160, 430], "width": 145, "size": 72 },
+    { "id": "waf", "icon": "AWS WAF", "label": "AWS WAF", "at": [305, 430], "width": 145, "size": 72 },
+    { "id": "alb", "icon": "alb", "label": "Application\\nLoad Balancer", "small": true, "at": [525, 430], "width": 130, "size": 72 },
+    { "id": "ecs", "icon": "Amazon Elastic Container Service", "label": "Amazon ECS", "note": "Fargate tasks", "small": true, "at": [760, 430], "width": 130, "size": 72 },
+    { "id": "db", "icon": "Amazon Aurora", "label": "Amazon Aurora", "note": "writer + reader", "small": true, "at": [1000, 430], "width": 170, "size": 72 }
+  ],
+
+  "arrows": [
+    { "from": "users:right", "to": "cf:left", "step": 1 },
+    { "from": "cf:right", "to": "waf:left", "step": 2 },
+    { "from": "waf:right", "to": "alb:left", "label": "HTTPS 443", "step": 3 },
+    { "from": "alb:right", "to": "ecs:left", "label": "HTTP 8080", "step": 4 },
+    { "from": "ecs:right", "to": "db:left", "label": "TLS 5432", "step": 5 }
+  ],
+
+  "steps": [
+    { "n": 1, "at": [216, 390], "text": "End users reach the application over HTTPS. **Amazon CloudFront** terminates TLS at the edge and serves cached static content." },
+    { "n": 2, "at": [361, 390], "text": "**AWS WAF** inspects every request against managed rule groups before it leaves the edge." },
+    { "n": 3, "at": [574, 390], "text": "Requests that pass reach the **Application Load Balancer** in the public subnet, which is the only internet-facing component inside the VPC." },
+    { "n": 4, "at": [809, 390], "text": "The load balancer forwards to **Amazon Elastic Container Service (Amazon ECS)** tasks on AWS Fargate, running in a private subnet with no route to the internet." },
+    { "n": 5, "at": [1069, 390], "text": "Tasks read and write **Amazon Aurora** over TLS in a dedicated data subnet. Credentials come from AWS Secrets Manager at task start." }
+  ]
+}

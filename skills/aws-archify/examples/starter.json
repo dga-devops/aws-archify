@@ -1,0 +1,62 @@
+{
+  "title": "My Service — Overview (Production)",
+  "reviewed": "August 2026",
+  "notes": "Environment: account <id>, region ap-southeast-7.",
+
+  "groups": [
+    {
+      "id": "cloud",
+      "kind": "cloud",
+      "label": "AWS Cloud — prod (<account id>) · ap-southeast-7",
+      "at": [300, 190],
+      "size": [940, 640]
+    },
+    {
+      "id": "region",
+      "kind": "region",
+      "label": "ap-southeast-7",
+      "at": [340, 260],
+      "size": [860, 530]
+    }
+  ],
+
+  "nodes": [
+    { "id": "user", "icon": "users", "label": "End users", "at": [80, 430], "width": 180, "size": 84 },
+    {
+      "id": "s3",
+      "icon": "Amazon S3",
+      "label": "Amazon S3",
+      "mono": "example-bucket-name",
+      "at": [430, 430],
+      "width": 230,
+      "size": 88
+    },
+    {
+      "id": "trail",
+      "icon": "AWS CloudTrail",
+      "label": "AWS CloudTrail",
+      "note": "data events",
+      "at": [830, 430],
+      "width": 230,
+      "size": 88
+    }
+  ],
+
+  "arrows": [
+    { "from": "user:right", "to": "s3:left", "label": "HTTPS", "step": 1 },
+    { "from": "s3:right", "to": "trail:left", "label": "data events", "step": 2 }
+  ],
+
+  "steps": [
+    {
+      "n": 1,
+      "at": [330, 396],
+      "text": "End users upload files to the **Amazon Simple Storage Service (Amazon S3)** bucket over HTTPS."
+    },
+    {
+      "n": 2,
+      "at": [730, 396],
+      "text": "**AWS CloudTrail** records every object-level operation for audit."
+    }
+  ]
+}

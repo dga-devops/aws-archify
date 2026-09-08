@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/dga-devops/aws-archify/schema/diagram.schema.json",
+  "title": "AWS Reference Architecture diagram",
+  "type": "object",
+  "required": ["title", "nodes"],
+  "additionalProperties": false,
+
+  "definitions": {
+    "point": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[x, y] in canvas pixels, from the top-left corner"
+    },
+    "anchor": {
+      "type": "string",
+      "pattern": "^[A-Za-z][\\w-]*:(left|right|top|bottom)(:-?\\d+(\\.\\d+)?)?$",
+      "description": "<node id>:<side>[:<offset along that edge>], e.g. \"s3:right\" or \"lam:right:-14\""
+    }
+  },
+
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "subtitle": { "type": ["string", "null"] },
+    "reviewed": {
+      "type": ["string", "null"],
+      "description": "Month and year for the \"Reviewed for technical accuracy\" footer"
+    },
+    "brand": {
+      "type": ["string", "null"],
+      "default": "AWS Reference Architecture",
+      "description": "Centred orange footer text"
+    },
+    "density": {
+      "enum": ["comfortable", "compact"],
+      "default": "comfortable",
+      "description": "Type scale. Use compact for a page with 3 nested boundaries and 12+ nodes."
+    },
+    "notes": { "type": ["string", "null"], "description": "Italic note under the callout steps" },
+
+    "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "number", "default": 1920 },
+        "height": { "type": "number", "default": 1080 }
+      }
+    },
+    "panel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "number", "default": 480 },
+        "head": { "type": "string", "description": "Heading above the numbered steps" }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "animation": { "enum": ["trace", "none"], "default": "trace" },
+        "duration": { "type": "number", "default": 2400, "description": "ms for one edge to complete" },
+        "stagger": { "type": "number", "default": 160, "description": "ms between consecutive steps" }
+      }
+    },
+
+    "groups": {
+      "type": "array",
+      "description": "Boundaries, declared outside-in",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["at", "size"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z][\\w-]*$" },
+          "kind": {
+            "enum": ["cloud", "account", "region", "vpc", "az", "private", "public", "onprem", "asg", "proposed", "plain"],
+            "default": "plain"
+          },
+          "label": { "type": ["string", "null"] },
+          "at": { "$ref": "#/definitions/point" },
+          "size": { "$ref": "#/definitions/point" },
+          "icon": {
+            "oneOf": [{ "type": "string" }, { "const": false }],
+            "description": "false drops the standard corner icon (for a non-AWS boundary); a string overrides it"
+          },
+          "sub": { "type": "boolean", "default": false, "description": "Smaller label and icon for a deeply nested boundary" },
+          "labelOffset": { "$ref": "#/definitions/point" },
+          "labelSize": { "type": "number" },
+          "color": { "type": "string", "description": "Override the standard colour — rarely correct" },
+          "dashed": { "type": "boolean" },
+          "fill": { "type": "string" }
+        }
+      }
+    },
+
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "icon", "at"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z][\\w-]*$", "description": "Arrow anchor target; must be unique" },
+          "icon": { "type": "string", "description": "AWS icon name, \"type:name\", or a path under aws-icons/" },
+          "label": { "type": ["string", "null"] },
+          "note": { "type": ["string", "null"], "description": "Smaller grey second line" },
+          "mono": { "type": ["string", "null"], "description": "Monospace identifier line" },
+          "at": { "$ref": "#/definitions/point" },
+          "width": { "type": "number", "default": 150 },
+          "size": { "type": "number", "default": 76, "description": "Icon edge length in px" },
+          "small": { "type": "boolean", "default": false },
+          "labelTop": { "type": "boolean", "default": false, "description": "Put the label above the icon" }
+        }
+      }
+    },
+
+    "arrows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": { "$ref": "#/definitions/anchor" },
+          "to": { "$ref": "#/definitions/anchor" },
+          "label": { "type": ["string", "null"] },
+          "step": { "type": "integer", "minimum": 1, "description": "Ties the arrow to a callout number and orders the trace" },
+          "dashed": { "type": "boolean", "default": false },
+          "both": { "type": "boolean", "default": false, "description": "Two-way: one arrow with two heads, never two arrows" },
+          "color": {
+            "type": "string",
+            "description": "ink | muted | accent | teal | purple | green | red, or a hex value"
+          },
+          "mid": { "type": "number", "description": "Pin the shared middle coordinate of a Z route" },
+          "width": { "type": "number" },
+          "labelDx": { "type": "number" },
+          "labelDy": { "type": "number" }
+        }
+      }
+    },
+
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text"],
+        "properties": {
+          "n": { "type": "integer", "minimum": 1 },
+          "at": { "$ref": "#/definitions/point", "description": "Where the numbered badge sits on the diagram" },
+          "onCanvas": { "type": "boolean", "default": true },
+          "tone": { "enum": ["default", "new"], "default": "default" },
+          "text": { "type": "string", "minLength": 1, "description": "Supports **bold**, `mono` and \\n" }
+        }
+      }
+    },
+
+    "boxes": {
+      "type": "array",
+      "description": "Free-standing notes on the canvas: assumptions, costs, caveats",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "at"],
+        "properties": {
+          "head": { "type": ["string", "null"] },
+          "text": { "type": "string", "minLength": 1 },
+          "at": { "$ref": "#/definitions/point" },
+          "width": { "type": "number", "default": 240 }
+        }
+      }
+    },
+
+    "legend": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "color": { "type": "string" },
+          "dashed": { "type": "boolean" },
+          "fill": { "type": "string" }
+        }
+      }
+    }
+  }
+}

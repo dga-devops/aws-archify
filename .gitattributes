@@ -1,0 +1,10 @@
+# Keep the toolchain byte-identical across Windows and CI: the runtime JS and CSS
+# are inlined into every generated diagram, and the SVGs are redistributed assets.
+* text=auto eol=lf
+*.svg  text eol=lf
+*.mjs  text eol=lf
+*.js   text eol=lf
+*.css  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.png  binary

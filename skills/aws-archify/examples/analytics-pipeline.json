@@ -1,0 +1,64 @@
+{
+  "title": "Example Analytics Pipeline — Ingest to Dashboard (Proposed)",
+  "reviewed": "September 2026",
+  "density": "compact",
+  "panel": { "head": "Proposed additions" },
+  "notes": "Fictional example. Every name, account and figure is a placeholder.",
+
+  "legend": [
+    { "text": "Running today", "color": "#232F3E" },
+    { "text": "Proposed in this design", "color": "#ED7100", "dashed": true, "fill": "rgba(237,113,0,0.06)" }
+  ],
+
+  "groups": [
+    { "kind": "cloud", "label": "AWS Cloud — example-data (000000000000)", "at": [40, 180], "size": [1120, 590] },
+    { "kind": "region", "label": "eu-west-1", "at": [70, 215], "size": [1070, 515] },
+    { "kind": "proposed", "label": "Proposed additions", "at": [660, 250], "size": [450, 465] }
+  ],
+
+  "nodes": [
+    { "id": "raw", "icon": "Amazon S3", "label": "Amazon S3", "note": "raw zone", "small": true, "at": [110, 330], "width": 150, "size": 56 },
+    { "id": "eb", "icon": "Amazon EventBridge", "label": "Amazon EventBridge", "note": "object created", "small": true, "at": [300, 330], "width": 150, "size": 56 },
+    { "id": "lam", "icon": "AWS Lambda", "label": "AWS Lambda", "note": "validate + route", "small": true, "at": [490, 330], "width": 150, "size": 56 },
+    { "id": "glue", "icon": "AWS Glue", "label": "AWS Glue", "note": "ETL job", "small": true, "at": [680, 330], "width": 150, "size": 56 },
+    { "id": "cur", "icon": "Amazon S3", "label": "Amazon S3", "note": "curated zone", "small": true, "at": [870, 330], "width": 150, "size": 56 },
+
+    { "id": "athena", "icon": "Amazon Athena", "label": "Amazon Athena", "note": "SQL over Parquet", "small": true, "at": [955, 600], "width": 150, "size": 56 },
+    { "id": "qs", "icon": "Amazon Quick", "label": "Amazon Quick Suite", "note": "dashboards", "small": true, "at": [720, 600], "width": 150, "size": 56 },
+    { "id": "analysts", "icon": "users", "label": "Analysts", "small": true, "at": [500, 600], "width": 150, "size": 56 }
+  ],
+
+  "boxes": [
+    {
+      "at": [1190, 300],
+      "width": 215,
+      "head": "Why a curated zone",
+      "text": "The raw zone keeps source files byte-for-byte for replay. Only the curated zone is partitioned Parquet, so a query scans megabytes instead of gigabytes."
+    },
+    {
+      "at": [1190, 470],
+      "width": 215,
+      "head": "Cost note",
+      "text": "**Amazon Athena** bills per TB scanned. Partitioning by date and compacting small files is what keeps this pipeline cheap, not the cluster size."
+    }
+  ],
+
+  "arrows": [
+    { "from": "raw:right", "to": "eb:left", "step": 1 },
+    { "from": "eb:right", "to": "lam:left", "step": 2 },
+    { "from": "lam:right", "to": "glue:left", "step": 3 },
+    { "from": "glue:right", "to": "cur:left", "label": "Parquet", "step": 4 },
+    { "from": "cur:bottom:85", "to": "athena:top", "step": 5 },
+    { "from": "athena:left", "to": "qs:right", "step": 6 },
+    { "from": "qs:left", "to": "analysts:right" }
+  ],
+
+  "steps": [
+    { "n": 1, "at": [174, 288], "text": "Source systems land files in the **Amazon Simple Storage Service (Amazon S3)** raw zone. Nothing here is ever rewritten, so any downstream change can be replayed." },
+    { "n": 2, "at": [359, 288], "text": "**Amazon EventBridge** receives the object-created event and decouples ingest from processing." },
+    { "n": 3, "at": [549, 288], "text": "**AWS Lambda** validates the file against its expected schema and routes anything malformed to a quarantine prefix." },
+    { "n": 4, "at": [739, 288], "tone": "new", "text": "**AWS Glue** converts each batch to partitioned Parquet." },
+    { "n": 5, "at": [989, 288], "tone": "new", "text": "The curated zone holds query-ready data, partitioned by ingest date." },
+    { "n": 6, "at": [900, 558], "tone": "new", "text": "**Amazon Athena** queries the curated zone directly, and **Amazon Quick Suite** serves the dashboards analysts actually open." }
+  ]
+}
