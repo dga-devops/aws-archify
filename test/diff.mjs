@@ -119,6 +119,36 @@ export function register(t, { ok, eq, throws }) {
     eq(r.claims.visualReview, 'pending', 'visual review is never claimed by the tool');
   });
 
+  t('cli: a scaled render is the scaled size, with the page filling it', () => {
+    // --window-size is CSS px and the device scale factor multiplies it. Passing
+    // width*scale as the window size doubled up: at --scale=2 the PNG came out
+    // 4x too large with the page in one corner. Read the IHDR, trust nothing.
+    const dim = (f) => {
+      const b = readFileSync(f);
+      return [b.readUInt32BE(16), b.readUInt32BE(20)];
+    };
+    const dir = mkdtempSync(join(tmpdir(), 'aws-archify-test-'));
+    const spec = join(EX, 'starter.json');
+    execFileSync(process.execPath, [CLI, 'render', spec, join(dir, 'r2.png'), '--scale=2'], { stdio: 'pipe' });
+    eq(dim(join(dir, 'r2.png')).join('x'), '3840x2160', 'render --scale=2');
+    execFileSync(process.execPath, [CLI, 'card', spec, join(dir, 'c2.png')], { stdio: 'pipe' });
+    eq(dim(join(dir, 'c2.png')).join('x'), '2400x1260', 'card default 2x');
+    execFileSync(process.execPath, [CLI, 'card', spec, join(dir, 'c1.png'), '--scale=1'], { stdio: 'pipe' });
+    eq(dim(join(dir, 'c1.png')).join('x'), '1200x630', 'card --scale=1');
+  });
+
+  t('build: card mode frames the same diagram inside a stage', () => {
+    const s = normalize(after());
+    const html = buildHtml(s, 'card');
+    ok(html.includes('id="diagram-stage"'), 'stage wrapper present');
+    ok(/transform: translate\([^)]+\) scale\([0-9.]+\)/.test(html), 'stage is scaled to fit');
+    ok(html.includes('class="card-head"') && html.includes('class="card-foot"'), 'card chrome present');
+    ok(!html.includes('<div class="callout-panel"'), 'no callout panel element on a card');
+    ok(!html.includes('class="title-rule"'), 'no page title rule on a card');
+    ok(!html.includes('aa-toolbar'), 'no viewer chrome on a card');
+    for (const n of s.nodes) ok(html.includes(`id="${n.id}"`), `node ${n.id} drawn`);
+  });
+
   t('cli: diff writes report, png and live html', () => {
     const dir = mkdtempSync(join(tmpdir(), 'aws-archify-test-'));
     const bPath = join(dir, 'before.json');

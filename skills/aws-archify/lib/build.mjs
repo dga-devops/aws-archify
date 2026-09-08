@@ -255,6 +255,7 @@ function legendHtml(spec) {
  */
 export function buildHtml(spec, mode = 'static') {
   const live = mode === 'live';
+  const card = mode === 'card';
 
   const arrows = spec.arrows.map((a) => {
     const o = { from: a.from, to: a.to };
@@ -288,20 +289,10 @@ export function buildHtml(spec, mode = 'static') {
     )
     .join('\n');
 
-  const parts = [
-    '<!DOCTYPE html>',
-    '<html lang="en">',
-    '<head>',
-    '<meta charset="UTF-8">',
-    `<title>${esc(spec.title)}</title>`,
-    '<style>' + styles(spec) + (live ? '\n' + runtime('live.css') : '') + '</style>',
-    '</head>',
-    '<body>',
-    '',
-    `  <div class="title">${rich(spec.title)}</div>`,
-    spec.subtitle ? `  <div class="subtitle">${rich(spec.subtitle)}</div>` : '',
-    '  <div class="title-rule"></div>',
-    '',
+  // The diagram proper: boundaries, nodes, notes, step badges. Everything else
+  // on the page — title, rule, panel, footer — is page furniture that a share
+  // card replaces with its own frame.
+  const diagram = [
     spec.groups.length ? '  <!-- groups -->' : '',
     ...spec.groups.map(groupHtml),
     '',
@@ -313,12 +304,41 @@ export function buildHtml(spec, mode = 'static') {
     '',
     canvasNums ? '  <!-- step numbers -->' : '',
     canvasNums,
+  ];
+
+  const page = card
+    ? [
+        cardHeadHtml(spec),
+        `  <div id="diagram-stage" style="${stageTransform(spec)}">`,
+        ...diagram,
+        '  </div>',
+        cardFootHtml(spec),
+      ]
+    : [
+        `  <div class="title">${rich(spec.title)}</div>`,
+        spec.subtitle ? `  <div class="subtitle">${rich(spec.subtitle)}</div>` : '',
+        '  <div class="title-rule"></div>',
+        '',
+        ...diagram,
+        '',
+        legendHtml(spec),
+        panelHtml(spec),
+        '',
+        spec.reviewed ? `  <div class="footer-note">Reviewed for technical accuracy ${esc(spec.reviewed)}</div>` : '',
+        spec.brand ? `  <div class="footer-brand">${esc(spec.brand)}</div>` : '',
+      ];
+
+  const parts = [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="UTF-8">',
+    `<title>${esc(spec.title)}</title>`,
+    '<style>' + styles(spec) + (live ? '\n' + runtime('live.css') : '') + (card ? '\n' + cardStyles() : '') + '</style>',
+    '</head>',
+    '<body>',
     '',
-    legendHtml(spec),
-    panelHtml(spec),
-    '',
-    spec.reviewed ? `  <div class="footer-note">Reviewed for technical accuracy ${esc(spec.reviewed)}</div>` : '',
-    spec.brand ? `  <div class="footer-brand">${esc(spec.brand)}</div>` : '',
+    ...page,
     '',
     '<script>',
     'window.DIAGRAM_CONFIG = ' + JSON.stringify(config) + ';',
@@ -332,4 +352,106 @@ export function buildHtml(spec, mode = 'static') {
   ];
 
   return parts.filter((p) => p !== '').join('\n');
+}
+
+// ---------- share card ----------
+// 1200×630 is the Open Graph frame every link preview uses. The diagram is
+// the same one, drawn by the same router at the same coordinates; the stage is
+// scaled to fit and framed with a title and a footer that carries the legend.
+
+export const CARD = { width: 1200, height: 630, pad: 32, head: 88, foot: 52 };
+
+/** Bounding box of everything drawn, from spec coordinates alone. Heights of
+ *  text are estimates; boundaries dominate any real diagram anyway. */
+export function contentBox(spec) {
+  const boxes = [];
+  for (const g of spec.groups) boxes.push([g.at[0], g.at[1], g.at[0] + g.size[0], g.at[1] + g.size[1]]);
+  for (const n of spec.nodes) {
+    const h = n.size + (n.label || n.note || n.mono ? 62 : 0);
+    boxes.push([n.at[0], n.at[1], n.at[0] + n.width, n.at[1] + h]);
+  }
+  for (const b of spec.boxes) boxes.push([b.at[0], b.at[1], b.at[0] + b.width, b.at[1] + 110]);
+  for (const s of spec.steps) if (s.at) boxes.push([s.at[0], s.at[1], s.at[0] + 32, s.at[1] + 32]);
+  if (!boxes.length) return { x: 0, y: 0, w: spec.canvas.width, h: spec.canvas.height };
+  const x = Math.min(...boxes.map((b) => b[0])), y = Math.min(...boxes.map((b) => b[1]));
+  const r = Math.max(...boxes.map((b) => b[2])), btm = Math.max(...boxes.map((b) => b[3]));
+  // breathing room so outlines and arrowheads at the edge are not clipped
+  return { x: x - 16, y: y - 16, w: r - x + 32, h: btm - y + 32 };
+}
+
+function stageTransform(spec) {
+  const c = contentBox(spec);
+  const availW = CARD.width - CARD.pad * 2;
+  const availH = CARD.height - CARD.head - CARD.foot;
+  const s = Math.min(availW / c.w, availH / c.h, 1);
+  const tx = CARD.pad + (availW - c.w * s) / 2 - c.x * s;
+  const ty = CARD.head + (availH - c.h * s) / 2 - c.y * s;
+  return `transform: translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${s.toFixed(4)});`;
+}
+
+function cardStyles() {
+  return `
+  /* ===== Share card ===== */
+  html, body { width: ${CARD.width}px; height: ${CARD.height}px; overflow: hidden; }
+  body { background: #FFFFFF; }
+  #diagram-stage {
+    position: absolute; top: 0; left: 0;
+    width: 1920px; height: 1080px;
+    transform-origin: 0 0;
+  }
+  .card-head {
+    position: absolute; top: 0; left: 0; right: 0; height: ${CARD.head}px;
+    padding: 22px ${CARD.pad}px 0;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+    border-bottom: 2px solid #232F3E;
+  }
+  .card-head .card-title {
+    font-size: 28px; font-weight: 600; line-height: 1.15; color: #232F3E;
+    max-height: 64px; overflow: hidden;
+  }
+  .card-head .card-brand {
+    flex: 0 0 auto; margin-top: 6px;
+    font-size: 14px; font-weight: 700; letter-spacing: .02em; color: #ED7100; white-space: nowrap;
+  }
+  .card-foot {
+    position: absolute; bottom: 0; left: 0; right: 0; height: ${CARD.foot}px;
+    padding: 0 ${CARD.pad}px;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    font-size: 13.5px; color: #545B64; border-top: 1px solid #D5DBDB;
+  }
+  .card-foot .card-legend { display: flex; gap: 18px; align-items: center; white-space: nowrap; }
+  .card-foot .card-legend .sw { display: inline-block; width: 22px; height: 12px; margin-right: 7px; vertical-align: -1px; }
+  .card-foot .card-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-foot .card-meta { flex: 0 0 auto; font-style: italic; white-space: nowrap; }
+`;
+}
+
+function cardHeadHtml(spec) {
+  return (
+    `  <div class="card-head">\n` +
+    `    <div class="card-title">${rich(spec.title)}</div>\n` +
+    (spec.brand ? `    <div class="card-brand">${esc(spec.brand)}</div>\n` : '') +
+    `  </div>`
+  );
+}
+
+function cardFootHtml(spec) {
+  const legend = spec.legend.length
+    ? `    <div class="card-legend">` +
+      spec.legend
+        .map((l) => {
+          const color = l.color ?? '#232F3E';
+          const sw = `border: 2px ${l.dashed ? 'dashed' : 'solid'} ${color};` + (l.fill ? ` background:${l.fill};` : '');
+          return `<span><span class="sw" style="${sw}"></span>${rich(l.text ?? '')}</span>`;
+        })
+        .join('') +
+      `</div>`
+    : '';
+  const sub = spec.subtitle
+    ? `    <div class="card-sub">${rich(spec.subtitle)}</div>`
+    : `    <div class="card-sub">${spec.nodes.length} services · ${spec.arrows.length} connections` +
+      (spec.steps.length ? ` · ${spec.steps.length} steps` : '') +
+      `</div>`;
+  const meta = spec.reviewed ? `    <div class="card-meta">Reviewed ${esc(spec.reviewed)}</div>` : '';
+  return `  <div class="card-foot">\n${legend || sub}\n${legend ? '' : ''}${meta}\n  </div>`;
 }

@@ -47,6 +47,7 @@ node bin/aws-archify.mjs deliver my-diagram.json out/
 |---|---|
 | `my-diagram.png` | 1920×1080 (or 4K with `--scale=2`). Docs, slides, PDFs. |
 | `my-diagram.live.html` | ~110 KB, self-contained, no server. Trace animation, click-to-focus, route tracing, dark theme, print-to-PDF. |
+| `my-diagram.card.png` | (`card`) 1200×630 at 2×, the Open Graph frame. The same diagram scaled to fit with a title and a legend footer — for the post that links to the doc. |
 
 ## Design decisions
 
@@ -96,6 +97,7 @@ node bin/aws-archify.mjs live      my-diagram.json     # interactive HTML
 node bin/aws-archify.mjs render    my-diagram.json     # PNG
 node bin/aws-archify.mjs deliver   my-diagram.json out/   # PNG + live + receipt
 node bin/aws-archify.mjs diff      as-is.json to-be.json out/   # what changed
+node bin/aws-archify.mjs card      my-diagram.json out/         # 1200x630 share card
 node bin/aws-archify.mjs doctor                        # can this machine render?
 ```
 

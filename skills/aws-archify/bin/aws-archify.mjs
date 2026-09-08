@@ -8,6 +8,7 @@
  *   render   <spec.json> [out.png]    validate, then capture the PNG
  *   deliver  <spec.json> [outdir]     render + live + receipt, what you ship
  *   diff     <before> <after> [dir]   one picture of what changed between two specs
+ *   card     <spec.json> [out.png]    1200x630 share card (Open Graph) for a post or article
  *   icons    <query>                  search the bundled AWS icon set
  *   init     [out.json]               a working starter spec
  *   doctor                            check this machine can render
@@ -19,13 +20,13 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 
 import { normalize, SpecError } from '../lib/spec.mjs';
-import { buildHtml } from '../lib/build.mjs';
+import { buildHtml, CARD } from '../lib/build.mjs';
 import { screenshot, verdict, findBrowser } from '../lib/render.mjs';
 import { searchIcons } from '../lib/icons.mjs';
 import { compareSpecs } from '../lib/diff.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG = '2.1.0';
+const PKG = '2.2.0';
 
 // ---------- tiny arg parser ----------
 const argv = process.argv.slice(2);
@@ -222,6 +223,7 @@ function usage() {
   ${c.bold('render')}   <spec.json> [out.png]  validate, then capture the PNG
   ${c.bold('deliver')}  <spec.json> [outdir]   render + live + receipt: what you ship
   ${c.bold('diff')}     <before> <after> [dir]  one picture of what changed between two specs
+  ${c.bold('card')}     <spec.json> [out.png]  1200x630 share card for a link preview or a post
   ${c.bold('icons')}    <query>                search the 862 bundled AWS icons
   ${c.bold('init')}     [out.json]             a working starter spec
   ${c.bold('doctor')}                          check this machine can render
@@ -339,6 +341,42 @@ async function cmdDeliver() {
     const r = writeReceipt(receiptPath, { specFile: file, artifacts: { png, live: liveOut }, verdict: v, scale, mode: 'deliver' });
     console.log(c.green('  wrote     ') + rel(receiptPath) + c.dim(`  (spec ${r.spec.sha256.slice(0, 12)} → png ${r.artifacts.png.sha256.slice(0, 12)})`));
   }
+  process.exit(ok ? 0 : 2);
+}
+
+async function cmdCard() {
+  const { spec, file } = loadSpec(positional[0]);
+  const png = outPath(positional[1], file, '.card.png');
+  const htmlTmp = join(tmpdir(), `aws-archify-${process.pid}.card.html`);
+  write(htmlTmp, buildHtml(spec, 'card'));
+
+  console.log(c.bold(basename(file)));
+  console.log(c.green('  contract  PASS'));
+  const v = await verdict(htmlTmp);
+  const ok = reportVerdict(v);
+  if (!ok && !flags.force) {
+    try { rmSync(htmlTmp); } catch {}
+    console.error('\n' + c.yellow('card not rendered.') + ' Fix the geometry above, or pass --force.');
+    process.exit(2);
+  }
+
+  // 2× by default: link previews are shown on high-density screens and the
+  // platforms downscale for free. 1200×630 stays the logical frame.
+  const scale = Number(flags.scale || 2);
+  const cand = candidatePath(png);
+  try {
+    await screenshot(htmlTmp, cand, { width: CARD.width, height: CARD.height, scale });
+    commit(cand, png);
+  } catch (e) {
+    discard(cand);
+    throw e;
+  } finally {
+    try { rmSync(htmlTmp); } catch {}
+  }
+  console.log(
+    c.green('  wrote     ') + rel(png) +
+    c.dim(`  (${CARD.width * scale}x${CARD.height * scale}, Open Graph 1200x630 @${scale}x — for the article and the post)`)
+  );
   process.exit(ok ? 0 : 2);
 }
 
@@ -476,6 +514,7 @@ const table = {
   render: cmdRender,
   deliver: cmdDeliver,
   diff: cmdDiff,
+  card: cmdCard,
   icons: cmdIcons,
   init: cmdInit,
   doctor: cmdDoctor,

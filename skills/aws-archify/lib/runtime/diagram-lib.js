@@ -27,12 +27,32 @@
   // the middle of one half instead of the middle of the run.
   var SNAP = 10;
 
+  // The diagram lives in a stage: body normally, or a wrapper when the page
+  // frames the diagram inside something else (a share card). Everything the
+  // router draws is appended here, and every measurement is taken in this
+  // element's own coordinate space.
+  var HOST = document.getElementById('diagram-stage') || document.body;
+
   // ---------- helpers ----------
+  // getBoundingClientRect reports screen pixels, which is only the stage's
+  // coordinate space while the stage is untransformed. A card scales the stage
+  // down; measuring through that transform would put every anchor in the wrong
+  // place. So rects are mapped back into stage-local coordinates.
+  function stageFrame() {
+    var b = HOST.getBoundingClientRect();
+    var w = HOST.offsetWidth || CANVAS_W;
+    var s = w ? b.width / w : 1;
+    return { left: b.left, top: b.top, s: s || 1 };
+  }
+
   function rectOf(el) {
     var r = el.getBoundingClientRect();
+    var f = stageFrame();
+    var left = (r.left - f.left) / f.s, top = (r.top - f.top) / f.s;
+    var right = (r.right - f.left) / f.s, bottom = (r.bottom - f.top) / f.s;
     return {
-      left: r.left, top: r.top, right: r.right, bottom: r.bottom,
-      cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2, el: el,
+      left: left, top: top, right: right, bottom: bottom,
+      cx: (left + right) / 2, cy: (top + bottom) / 2, el: el,
     };
   }
 
@@ -109,7 +129,7 @@
     );
     var defs = document.createElementNS(svg.namespaceURI, 'defs');
     svg.appendChild(defs);
-    document.body.appendChild(svg);
+    HOST.appendChild(svg);
 
     var markers = {};
     function markerFor(color) {
@@ -203,7 +223,7 @@
           labelEl.style.transform = 'translate(-50%, -100%)';
           labelEl.style.top = ly - 4 + 'px';
         }
-        document.body.appendChild(labelEl);
+        HOST.appendChild(labelEl);
       }
 
       drawn.push({
@@ -506,7 +526,8 @@
     //    unfinished. Advisory — a five-step linear flow is legitimately short.
     var content = labels.concat(icons, grpLabels, notes);
     document.querySelectorAll('.grp').forEach(function (el) { if (!isGhost(el)) content.push(rectOf(el)); });
-    if (content.length) {
+    // A card frames the diagram itself; page balance is not its concern.
+    if (content.length && CFG.mode !== 'card') {
       var top = Math.min.apply(null, content.map(function (r) { return r.top; }));
       var bottom = Math.max.apply(null, content.map(function (r) { return r.bottom; }));
       var titleRule = document.querySelector('.title-rule');

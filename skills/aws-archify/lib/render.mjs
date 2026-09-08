@@ -75,9 +75,12 @@ export async function screenshot(htmlPath, pngPath, opts) {
   const url = pathToFileURL(htmlPath).href;
   // Chrome fails silently rather than creating a missing output directory.
   mkdirSync(dirname(pngPath), { recursive: true });
+  // --window-size is in CSS pixels; the device scale factor multiplies it.
+  // Passing width*scale here as well multiplied twice, and at --scale=2 the
+  // page occupied one quarter of a screenshot four times too large.
   const args = [
     ...BASE_FLAGS,
-    `--window-size=${Math.round(opts.width * opts.scale)},${Math.round(opts.height * opts.scale)}`,
+    `--window-size=${Math.round(opts.width)},${Math.round(opts.height)}`,
     `--force-device-scale-factor=${opts.scale}`,
     '--default-background-color=FFFFFFFF',
     `--screenshot=${pngPath}`,

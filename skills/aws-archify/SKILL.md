@@ -36,6 +36,7 @@ node $CLI live     my-diagram.json out/ # interactive only -> share, explain
 node $CLI deliver  my-diagram.json out/ # both + a receipt
 
 node $CLI diff as-is.json to-be.json out/  # one picture of what a proposal changes
+node $CLI card my-diagram.json out/        # 1200x630 share card for a post or link preview
 ```
 
 `validate` and `deliver` exit non-zero when the geometry fails. Each finding is
@@ -70,6 +71,12 @@ usually says, so read it before asking:
 | "put it in the doc", "for the slide deck", "attach to the ticket", "print it" | `render` | PNG only |
 | "walk the team through it", "send them something they can click", "explain the flow", "show me how traffic moves" | `live` | interactive HTML only |
 | a plain "draw me a diagram of X", or nothing that hints either way | `deliver` | both |
+| "for the blog post", "for LinkedIn", "a preview image", "og:image" | `card` | 1200×630 PNG @2× |
+
+A card is the same diagram framed for a link preview: title on top, the
+drawing scaled to fit, legend and date in the footer, no callout panel. It is
+an addition to `deliver`, not a replacement — the post links to the article,
+the article carries the real PNG.
 
 Two cases where you should stop and ask instead of guessing:
 
