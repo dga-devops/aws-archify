@@ -249,6 +249,10 @@ t('cli: an explicit file name is still honoured', () => {
   ok(statSync(target).isFile(), 'explicit file name honoured');
 });
 
+// ---------- diff, delivery, diagnostics ----------
+const { register } = await import('./diff.mjs');
+register(t, { ok, eq, throws });
+
 // ---------- report ----------
 console.log(`\n  ${pass} passed, ${failures.length} failed\n`);
 for (const f of failures) console.error('  FAIL  ' + f + '\n');

@@ -70,21 +70,37 @@ error listing the candidates — it can no longer become a blank box that ships.
 **Motion is finite and honest.** One pass, no loop. It respects
 `prefers-reduced-motion`, and print strips every trace of the viewer.
 
+**Diagnostics say what to change, not just what is wrong.** Every finding has
+a stable code, the exact subject and a fix with the measured value in it —
+`set labelDy: -22 on arrows[3]`, `offset both anchors by 18px` — so an agent
+repairs a diagram in one round instead of guessing.
+
+**`diff` draws what a proposal changes.** Keep an as-is spec and a to-be spec;
+`diff` matches items by identity and renders one diagram with additions dashed
+orange, changes outlined, moves dotted teal and removals as struck-through
+ghosts, plus a change report for the PR. No more hand-drawn "proposed" boxes.
+
+**Delivery is atomic and receipted.** An artefact is either the previous good
+one or the new verified one — never half a file. `deliver` writes a
+`receipt.json` binding the spec's SHA-256 to each output's, which is the answer
+to "which JSON made this PNG" in a docs repo.
+
 ## Commands
 
 ```bash
 node bin/aws-archify.mjs init      my-diagram.json     # starter spec
 node bin/aws-archify.mjs icons     "load balancer"     # search the icon set
-node bin/aws-archify.mjs validate  my-diagram.json     # contract + geometry
+node bin/aws-archify.mjs validate  my-diagram.json     # contract + geometry, with fixes
 node bin/aws-archify.mjs build     my-diagram.json     # static HTML
 node bin/aws-archify.mjs live      my-diagram.json     # interactive HTML
 node bin/aws-archify.mjs render    my-diagram.json     # PNG
-node bin/aws-archify.mjs deliver   my-diagram.json out/
+node bin/aws-archify.mjs deliver   my-diagram.json out/   # PNG + live + receipt
+node bin/aws-archify.mjs diff      as-is.json to-be.json out/   # what changed
 node bin/aws-archify.mjs doctor                        # can this machine render?
 ```
 
 Flags: `--scale=2` (4K PNG) · `--dark` (live viewer opens dark) · `--force`
-(render despite a failed check, banner and all) · `--json`.
+(render despite a failed check, banner and all) · `--no-receipt` · `--json`.
 
 ## Requirements
 
@@ -95,7 +111,10 @@ unusual.
 ## Viewer keys
 
 `Space` replay · click a node to focus · `R` then a second node to trace a route
-· `T` theme · `P` print/PDF · `Esc` clear · `?` help
+· `T` theme · `L` copy link · `P` print/PDF · `Esc` clear · `?` help
+
+A copied link carries the view: `#focus=ecs`, `#route=users,db`, `#theme=dark`.
+Paste it in a chat and the reader opens on exactly that node or path.
 
 ## Credits
 

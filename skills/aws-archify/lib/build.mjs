@@ -125,6 +125,31 @@ function styles(spec) {
   .legend .row { display: flex; align-items: center; gap: 9px; }
   .legend .sw { width: 26px; height: 15px; flex: 0 0 auto; }
 
+  /* ===== Delta view: what changed between two revisions ===== */
+  .delta-added .grp-label, .delta-added .label, .note.delta-added .hd { color: #ED7100; }
+  .node.delta-added img, .note.delta-added, .grp.delta-added {
+    outline: 3px dashed #ED7100; outline-offset: 4px;
+  }
+  .grp.delta-added { background: rgba(237,113,0,0.06); }
+  .num.delta-added { background: #ED7100; }
+
+  .delta-removed { opacity: .38; filter: grayscale(1); }
+  .node.delta-removed img, .note.delta-removed, .grp.delta-removed {
+    outline: 3px dashed #7D8998; outline-offset: 4px;
+  }
+  .node.delta-removed .label, .arrow-label.delta-removed { text-decoration: line-through; }
+  .num.delta-removed { background: #7D8998; }
+  #diagram-edges .delta-removed { opacity: .45; }
+
+  .node.delta-changed img, .note.delta-changed, .grp.delta-changed {
+    outline: 3px solid #ED7100; outline-offset: 4px;
+  }
+  .node.delta-changed .label, .arrow-label.delta-changed { color: #ED7100; font-weight: 600; }
+  #diagram-edges .delta-changed { stroke-width: 3.5; }
+
+  .node.delta-moved img { outline: 3px dotted #00A4A6; outline-offset: 4px; }
+  .node.delta-moved .label { color: #00A4A6; }
+
   .footer-note {
     position: absolute; bottom: 26px; left: 40px;
     font-size: 16px; font-style: italic; color: #545B64;
@@ -145,7 +170,7 @@ function groupHtml(g) {
   // construct (a SaaS vendor, another cloud) but should still read as a boundary.
   const iconSpec = g.icon === false ? null : g.icon ?? kind.icon;
 
-  const cls = ['grp', kind.italic ? 'italic' : '', g.sub ? 'sub' : '', iconSpec ? '' : 'no-icon']
+  const cls = ['grp', kind.italic ? 'italic' : '', g.sub ? 'sub' : '', iconSpec ? '' : 'no-icon', g.delta ? `delta-${g.delta}` : '']
     .filter(Boolean)
     .join(' ');
   const style = [
@@ -185,7 +210,7 @@ function nodeHtml(n) {
   const img = `<img src="${ic.dataUri}" width="${n.size}" height="${n.size}" alt="${esc(ic.name)}">`;
   const inner = n.labelTop ? `${label}\n    ${img}` : `${img}${label ? '\n    ' + label : ''}`;
   return (
-    `  <div class="node${n.labelTop ? ' lbl-top' : ''}" id="${esc(n.id)}" style="${style}">\n` +
+    `  <div class="node${n.labelTop ? ' lbl-top' : ''}${n.delta ? ' delta-' + n.delta : ''}" id="${esc(n.id)}" style="${style}">\n` +
     `    ${inner}\n  </div>`
   );
 }
@@ -193,7 +218,7 @@ function nodeHtml(n) {
 function boxHtml(b) {
   const head = b.head ? `\n    <div class="hd">${rich(b.head)}</div>` : '';
   return (
-    `  <div class="note" style="top:${b.at[1]}px; left:${b.at[0]}px; width:${b.width}px;">${head}\n` +
+    `  <div class="note${b.delta ? ' delta-' + b.delta : ''}" style="top:${b.at[1]}px; left:${b.at[0]}px; width:${b.width}px;">${head}\n` +
     `    ${rich(b.text)}\n  </div>`
   );
 }
@@ -204,7 +229,7 @@ function panelHtml(spec) {
   const steps = spec.steps
     .map(
       (s) =>
-        `    <div class="callout"><div class="num${s.tone === 'new' ? ' new' : ''}">${s.n}</div>\n` +
+        `    <div class="callout${s.delta ? ' delta-' + s.delta : ''}"><div class="num${s.tone === 'new' ? ' new' : ''}${s.delta ? ' delta-' + s.delta : ''}">${s.n}</div>\n` +
         `      <div class="step-text">${rich(s.text)}</div></div>`
     )
     .join('\n');
@@ -242,6 +267,7 @@ export function buildHtml(spec, mode = 'static') {
     if (a.width !== undefined) o.width = a.width;
     if (a.labelDx !== undefined) o.labelDx = a.labelDx;
     if (a.labelDy !== undefined) o.labelDy = a.labelDy;
+    if (a.delta) o.delta = a.delta;
     return o;
   });
 
@@ -257,7 +283,7 @@ export function buildHtml(spec, mode = 'static') {
     .filter((s) => s.onCanvas && s.at)
     .map(
       (s) =>
-        `  <div class="num on-canvas${s.tone === 'new' ? ' new' : ''}" ` +
+        `  <div class="num on-canvas${s.tone === 'new' ? ' new' : ''}${s.delta ? ' delta-' + s.delta : ''}" ` +
         `style="top:${s.at[1]}px; left:${s.at[0]}px;">${s.n}</div>`
     )
     .join('\n');

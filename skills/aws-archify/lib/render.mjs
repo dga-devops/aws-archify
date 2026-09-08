@@ -106,17 +106,30 @@ export async function verdict(htmlPath) {
   });
 
   const title = /<title>([^<]*)<\/title>/i.exec(stdout);
-  const banner = /<div id="diagram-validation-banner"[^>]*>([\s\S]*?)<\/div>/i.exec(stdout);
-  const issues = banner
-    ? banner[1]
-        .split('\n')
-        .map((l) => l.replace(/^\s*[•·]\s*/, '').trim())
-        .filter((l) => l && !/^VALIDATION FAILED/i.test(l))
-        .map((l) => l.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'))
-    : [];
-
   const t = title ? title[1] : '';
-  if (/^PASS\b/.test(t)) return { ok: true, status: 'PASS', issues: [] };
-  if (/^FAIL\(/.test(t)) return { ok: false, status: t.split(' - ')[0], issues };
-  return { ok: false, status: 'UNKNOWN', issues: ['the runtime did not report a verdict — open the HTML and check the console'] };
+
+  // The runtime writes its findings into a JSON script element; that is the
+  // channel of record. The <title> stamp is only the quick yes/no.
+  const sink = /<script type="application\/json" id="diagram-diagnostics">([\s\S]*?)<\/script>/i.exec(stdout);
+  let errors = [], warnings = [];
+  if (sink) {
+    try {
+      const parsed = JSON.parse(sink[1]);
+      errors = parsed.errors || [];
+      warnings = parsed.warnings || [];
+    } catch {
+      errors = [{ code: 'runtime/diagnostics', severity: 'error', subject: 'diagram-lib', message: 'diagnostics were emitted but could not be parsed', evidence: {}, fixes: [] }];
+    }
+  }
+
+  const issues = errors.map((d) => d.message);
+  if (/^PASS\b/.test(t)) return { ok: true, status: 'PASS', issues: [], errors: [], warnings };
+  if (/^FAIL\(/.test(t)) return { ok: false, status: t.split(' - ')[0], issues, errors, warnings };
+  return {
+    ok: false,
+    status: 'UNKNOWN',
+    issues: ['the runtime did not report a verdict — open the HTML and check the console'],
+    errors: [{ code: 'runtime/no-verdict', severity: 'error', subject: 'diagram-lib', message: 'no verdict was reported', evidence: {}, fixes: [] }],
+    warnings,
+  };
 }

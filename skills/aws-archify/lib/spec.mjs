@@ -9,6 +9,16 @@
 
 export const SIDES = ['left', 'right', 'top', 'bottom'];
 
+/** Change markers a delta view attaches to items. Authors never write these;
+ *  `aws-archify diff` does, and the builder renders them. */
+export const DELTA = ['added', 'removed', 'changed', 'moved'];
+
+function checkDelta(v, where, bad) {
+  // null is "absent": a normalised spec fed back in carries delta: null.
+  if (v != null && !DELTA.includes(v)) bad(`${where}.delta: must be one of ${DELTA.join(', ')}`);
+  return v ?? null;
+}
+
 /** Group kinds and their standard styling. Colours come from the official
  *  AWS group icons — do not tune them per-diagram. */
 export const GROUP_KINDS = {
@@ -165,6 +175,7 @@ export function normalize(raw, { file = 'spec' } = {}) {
       fill: g.fill ?? null,
       labelSize: isNum(g.labelSize) ? g.labelSize : null,
       sub: g.sub === true,
+      delta: checkDelta(g.delta, where, bad),
     });
   });
 
@@ -190,6 +201,7 @@ export function normalize(raw, { file = 'spec' } = {}) {
       size: n.size ?? 76,
       small: n.small === true,
       labelTop: n.labelTop === true,
+      delta: checkDelta(n.delta, where, bad),
     });
   });
 
@@ -205,6 +217,7 @@ export function normalize(raw, { file = 'spec' } = {}) {
       text: b.text,
       at: b.at,
       width: b.width ?? 240,
+      delta: checkDelta(b.delta, where, bad),
     });
   });
 
@@ -228,7 +241,10 @@ export function normalize(raw, { file = 'spec' } = {}) {
     if (s.tone !== undefined && !['default', 'new'].includes(s.tone)) {
       bad(`${where}.tone: must be "default" or "new"`);
     }
-    spec.steps.push({ n, at: s.at ?? null, text: s.text, tone: s.tone ?? 'default', onCanvas });
+    spec.steps.push({
+      n, at: s.at ?? null, text: s.text, tone: s.tone ?? 'default', onCanvas,
+      delta: checkDelta(s.delta, where, bad),
+    });
   });
   spec.steps.sort((a, b) => a.n - b.n);
 
@@ -274,6 +290,7 @@ export function normalize(raw, { file = 'spec' } = {}) {
       width: a.width,
       labelDx: a.labelDx,
       labelDy: a.labelDy,
+      delta: checkDelta(a.delta, where, bad),
     });
   });
 

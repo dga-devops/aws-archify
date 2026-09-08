@@ -33,12 +33,32 @@ node $CLI validate my-diagram.json      # contract + geometry, writes nothing
 
 node $CLI render   my-diagram.json out/ # PNG only        -> docs, slides, print
 node $CLI live     my-diagram.json out/ # interactive only -> share, explain
-node $CLI deliver  my-diagram.json out/ # both
+node $CLI deliver  my-diagram.json out/ # both + a receipt
+
+node $CLI diff as-is.json to-be.json out/  # one picture of what a proposal changes
 ```
 
-`validate` and `deliver` exit non-zero when the geometry fails, and print every
-problem with the node ids involved. Fix and re-run — do not pass `--force`
-unless the user explicitly asks for a broken render to look at.
+`validate` and `deliver` exit non-zero when the geometry fails. Each finding is
+a stable code, the exact subject, and **a fix you can apply verbatim**:
+
+```
+overlap/step         steps[n=3] overlaps nodes[id=alb] icon
+                     → set at: [560,392] on steps[n=3]  — move the badge above/below the collision
+arrows/too-close     parallel runs of arrows[3] and arrows[5] are 6px apart (need 24)
+                     → offset both anchors of one arrow by 18px (e.g. "a:right:18" and "b:left:18")
+```
+
+Apply the suggested value, re-run. One diagnostic at a time; a second run after
+each fix is cheaper than reasoning about how two fixes interact. Do not pass
+`--force` unless the user explicitly asks for a broken render to look at.
+
+**A label is data, not decoration.** If an arrow label does not fit, move the
+label (`labelDy`, `labelDx`), re-route (`mid`), or move a node. Shorten the
+wording only when meaning survives. Never delete a label to make geometry pass.
+
+A `warning` does not fail the build. `layout/empty-band` means the diagram sits
+in the top half of the page — a short linear flow may legitimately look like
+that; a system overview should not.
 
 ### 1. Decide which output to produce
 
@@ -194,8 +214,43 @@ A failure means the layout is wrong, not that the check is too strict. If an
 arrow needs more than two bends or has to detour a long way, move the node —
 that is the layout telling you the flow does not run left→right yet.
 
+## Showing what a proposal changes
+
+When the user has an as-is diagram and wants a to-be, **do not draw a
+`proposed` boundary by hand.** Keep two specs and let `diff` draw the difference:
+
+```bash
+node $CLI diff as-is.json to-be.json out/
+```
+
+Items are matched by identity (node `id`, arrow endpoints, step number), so a
+node that moved is shown as moved, not as removed-and-added. The output is one
+diagram of the to-be state with additions dashed orange, changes outlined
+orange, moves dotted teal, and removals drawn as struck-through grey ghosts,
+plus a change report (`*.delta.json`) that can go in the PR. The panel
+describes the to-be state; removed steps appear only in the report.
+
+The `proposed` group kind remains for the case where there is no as-is spec.
+
 ## Delivering
 
-- Commit the `.json` as the source. The PNG and live HTML are build outputs.
+`deliver` writes the PNG, the live HTML and a **receipt** (`*.receipt.json`)
+binding the spec's SHA-256 to each artefact's. Commit all four in a docs
+repository; the receipt answers "which JSON made this PNG" without opening
+either.
+
+Report three claims separately. They are different kinds of evidence and one
+never implies another:
+
+```
+geometry:       PASS                       ← deterministic, from the validator
+looked at it:   yes — zoomed all quadrants  ← you, or "no" if you could not
+sources:        design.mdx §3, terraform/vpc.tf; conflict on subnet CIDR noted
+```
+
+Never write "PASS" for the second line because the first one passed. The
+validator cannot see a wrong icon, a step out of order, or a diagram that
+explains nothing.
+
+- Commit the `.json` as the source. The PNG, live HTML and receipt are outputs.
 - Report which values came from which source, and any conflict you found.
-- Say what the geometry verdict was.

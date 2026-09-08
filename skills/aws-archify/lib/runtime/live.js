@@ -100,6 +100,9 @@
     root.removeAttribute('data-focus');
     focusId = null;
     routeSeed = null;
+    linkState.focus = null;
+    linkState.route = null;
+    writeHash();
     document.querySelectorAll('.aa-lit, .aa-seed').forEach(function (el) {
       el.classList.remove('aa-lit', 'aa-seed');
     });
@@ -125,6 +128,8 @@
   function focusNode(id) {
     clearHighlight();
     focusId = id;
+    linkState.focus = id;
+    writeHash();
     root.setAttribute('data-focus', 'node');
     var seed = document.getElementById(id);
     if (seed) seed.classList.add('aa-lit', 'aa-seed');
@@ -165,6 +170,8 @@
   function showRoute(fromId, toId) {
     var path = traceRoute(fromId, toId);
     clearHighlight();
+    linkState.route = [fromId, toId];
+    writeHash();
     root.setAttribute('data-focus', 'route');
     var a = nodeName(fromId), b = nodeName(toId);
     if (!path) {
@@ -193,6 +200,45 @@
     return String(s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
     });
+  }
+
+  // ---------- deep links ----------
+  // The viewer state that matters for "look at this" lives in the hash, so a
+  // pasted URL opens on the same node, route or theme. Nothing else is stored.
+  var linkState = { focus: null, route: null };
+
+  function readHash() {
+    var out = {};
+    String(location.hash || '').replace(/^#/, '').split('&').forEach(function (kv) {
+      if (!kv) return;
+      var i = kv.indexOf('=');
+      var k = i < 0 ? kv : kv.slice(0, i);
+      var v = i < 0 ? '' : decodeURIComponent(kv.slice(i + 1));
+      out[k] = v;
+    });
+    return out;
+  }
+
+  function writeHash() {
+    var parts = [];
+    if (linkState.route) parts.push('route=' + encodeURIComponent(linkState.route.join(',')));
+    else if (linkState.focus) parts.push('focus=' + encodeURIComponent(linkState.focus));
+    if (root.getAttribute('data-theme') === 'dark') parts.push('theme=dark');
+    var h = parts.length ? '#' + parts.join('&') : '';
+    if (h !== location.hash && (h || location.hash)) {
+      try { history.replaceState(null, '', location.pathname + location.search + h); } catch (e) {}
+    }
+  }
+
+  function copyLink() {
+    writeHash();
+    var url = location.href;
+    var done = function () { hint('Link copied — it opens on this exact view. <kbd>Esc</kbd> to clear'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () { hint('Copy this: <code>' + esc(url) + '</code>'); });
+    } else {
+      hint('Copy this: <code>' + esc(url) + '</code>');
+    }
   }
 
   // ---------- chrome ----------
@@ -231,12 +277,14 @@
         var dark = root.getAttribute('data-theme') === 'dark';
         root.setAttribute('data-theme', dark ? 'light' : 'dark');
         setBtn('theme', !dark);
+        writeHash();
       }],
+      ['link', 'Copy link', copyLink],
       ['print', 'Print / PDF', function () { clearHighlight(); window.print(); }],
       ['help', 'Keys', function () {
         hint(
           '<kbd>Space</kbd> replay · <kbd>R</kbd> route from focused node · ' +
-          '<kbd>T</kbd> theme · <kbd>P</kbd> print · <kbd>Esc</kbd> clear · click a node to focus'
+          '<kbd>T</kbd> theme · <kbd>L</kbd> copy link · <kbd>P</kbd> print · <kbd>Esc</kbd> clear · click a node to focus'
         );
       }],
     ];
@@ -281,13 +329,30 @@
     if (k === 't') return buttons.theme.click();
     if (k === 'r') return buttons.route.click();
     if (k === 'p') { ev.preventDefault(); return buttons.print.click(); }
+    if (k === 'l') return copyLink();
     if (k === '?' || k === '/') { ev.preventDefault(); return buttons.help.click(); }
   });
 
   toolbar();
+
+  // Restore a deep-linked view. A linked focus/route is what the reader was
+  // sent to see, so it wins over the opening trace.
+  var linked = readHash();
+  if (linked.theme === 'dark') root.setAttribute('data-theme', 'dark');
   if (root.getAttribute('data-theme') === 'dark') setBtn('theme', true);
+  var linkedView = false;
+  if (linked.route) {
+    var ends = linked.route.split(',');
+    if (ends.length === 2 && document.getElementById(ends[0]) && document.getElementById(ends[1])) {
+      showRoute(ends[0], ends[1]);
+      linkedView = true;
+    }
+  } else if (linked.focus && document.getElementById(linked.focus)) {
+    focusNode(linked.focus);
+    linkedView = true;
+  }
 
   // The trace is the first thing a reader sees; after it settles the page is
   // identical to the static render.
-  if ((MOTION.animation || 'trace') === 'trace') play();
+  if (!linkedView && (MOTION.animation || 'trace') === 'trace') play();
 })();

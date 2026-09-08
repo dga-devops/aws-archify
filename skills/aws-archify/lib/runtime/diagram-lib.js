@@ -169,6 +169,13 @@
       // stroke-dasharray, so only solid edges may be animated that way.
       path.style.setProperty('--len', Math.round(pathLength(pts)));
       if (spec.dashed) path.setAttribute('data-dashed', '1');
+      // Delta views mark what changed between two revisions of the spec. A
+      // removed relationship is drawn as a ghost so the reader sees what went
+      // away, but it is not an obstacle and does not animate.
+      if (spec.delta) {
+        path.classList.add('delta-' + spec.delta);
+        path.setAttribute('data-delta', spec.delta);
+      }
       svg.appendChild(path);
 
       var labelEl = null;
@@ -182,7 +189,7 @@
           { s: segs[0], len: -1 }
         ).s;
         labelEl = document.createElement('div');
-        labelEl.className = 'arrow-label';
+        labelEl.className = 'arrow-label' + (spec.delta ? ' delta-' + spec.delta : '');
         labelEl.textContent = spec.label;
         labelEl.setAttribute('data-animate', 'edge-label');
         labelEl.setAttribute('data-edge', String(i));
@@ -201,7 +208,7 @@
 
       drawn.push({
         spec: spec, index: i, order: order, points: pts, segs: toSegments(pts),
-        from: a, to: b, el: path, labelEl: labelEl,
+        from: a, to: b, el: path, labelEl: labelEl, ghost: spec.delta === 'removed',
       });
     });
 
@@ -261,38 +268,110 @@
     return '"' + (t.length > 40 ? t.slice(0, 40) + '…' : t) + '"';
   }
 
+  // ---------- diagnostics ----------
+  // Every finding is a structured record, not a sentence: a stable code the
+  // CLI and tests can key on, the exact subject, the measured evidence, and
+  // fixes the author can apply verbatim. An agent that reads "try labelDy: -22"
+  // repairs the diagram in one round; one that reads "label overlaps" guesses.
+  function diag(code, severity, subject, message, evidence, fixes) {
+    return {
+      code: code,
+      severity: severity, // 'error' fails the build, 'warning' is advisory
+      subject: subject,
+      message: message,
+      evidence: evidence || {},
+      fixes: fixes || [],
+    };
+  }
+
+  function arrowRef(arr) {
+    return 'arrows[' + arr.index + '] ' + arr.spec.from + ' -> ' + arr.spec.to;
+  }
+
+  function nodeIdOf(el) {
+    var n = el.closest ? el.closest('.node') : null;
+    return n && n.id ? n.id : null;
+  }
+
+  function subjectOf(r) {
+    var cls = r.el.className || '';
+    var id = nodeIdOf(r.el);
+    if (/\bnum\b/.test(cls)) return 'steps[n=' + r.el.textContent.trim() + ']';
+    if (/arrow-label/.test(cls)) return 'arrow label ' + describe(r.el);
+    if (/grp-label/.test(cls)) return 'group label ' + describe(r.el);
+    if (/\bnote\b/.test(cls)) return 'boxes ' + describe(r.el);
+    if (r.el.tagName === 'IMG') return 'nodes[id=' + id + '] icon';
+    if (/\blabel\b/.test(cls)) return 'nodes[id=' + id + '] label';
+    return describe(r.el);
+  }
+
+  function rnd(v) { return Math.round(v); }
+
   function validate(drawn) {
-    var issues = [];
+    var out = [];
     var panel = document.querySelector('.callout-panel');
     var panelLeft = panel ? rectOf(panel).left : CANVAS_W;
 
     function inPanel(el) {
       return panel && panel.contains(el);
     }
+    // A removed item in a delta view is a ghost: drawn faintly, never an obstacle.
+    function isGhost(el) {
+      return !!(el.closest && el.closest('.delta-removed'));
+    }
 
     var labels = [], nums = [], arrowLabels = [], icons = [], grpLabels = [], notes = [];
-    document.querySelectorAll('.note').forEach(function (el) { notes.push(rectOf(el)); });
-    document.querySelectorAll('.node .label').forEach(function (el) { labels.push(rectOf(el)); });
-    document.querySelectorAll('.num').forEach(function (el) { if (!inPanel(el)) nums.push(rectOf(el)); });
-    document.querySelectorAll('.arrow-label').forEach(function (el) { arrowLabels.push(rectOf(el)); });
-    document.querySelectorAll('.node img').forEach(function (el) { icons.push(rectOf(el)); });
-    document.querySelectorAll('.grp .grp-label').forEach(function (el) { grpLabels.push(rectOf(el)); });
+    document.querySelectorAll('.note').forEach(function (el) { if (!isGhost(el)) notes.push(rectOf(el)); });
+    document.querySelectorAll('.node .label').forEach(function (el) { if (!isGhost(el)) labels.push(rectOf(el)); });
+    document.querySelectorAll('.num').forEach(function (el) { if (!inPanel(el) && !isGhost(el)) nums.push(rectOf(el)); });
+    document.querySelectorAll('.arrow-label').forEach(function (el) { if (!isGhost(el)) arrowLabels.push(rectOf(el)); });
+    document.querySelectorAll('.node img').forEach(function (el) { if (!isGhost(el)) icons.push(rectOf(el)); });
+    document.querySelectorAll('.grp .grp-label').forEach(function (el) { if (!isGhost(el)) grpLabels.push(rectOf(el)); });
 
     var obstacles = labels.concat(nums, arrowLabels, icons, grpLabels, notes);
+    var live = drawn.filter(function (a) { return !a.ghost; });
 
     // 1) arrow segments must not cross any text, number or icon
-    drawn.forEach(function (arr) {
-      arr.segs.forEach(function (rawSeg) {
+    live.forEach(function (arr) {
+      arr.segs.forEach(function (rawSeg, si) {
         var seg = shrinkSeg(rawSeg, 10); // ignore the immediate ends
         obstacles.forEach(function (r) {
           if (arr.labelEl && r.el === arr.labelEl) return;
           if (r.el === arr.from.rect.el || r.el === arr.to.rect.el) return;
-          if (segIntersectsRect(seg, r, 1)) {
-            issues.push(
-              'arrow #' + arr.index + ' (' + arr.spec.from + ' -> ' + arr.spec.to + ') crosses ' +
-                r.el.className + ' ' + describe(r.el)
-            );
+          if (!segIntersectsRect(seg, r, 1)) return;
+
+          var fixes = [];
+          var isZ = arr.points.length === 4;
+          var isMiddle = isZ && si === 1;
+          if (isMiddle) {
+            // the shared middle leg of a Z: move it past the obstacle
+            var before = seg.axis === 'v' ? rnd(r.left - 12) : rnd(r.top - 12);
+            var after = seg.axis === 'v' ? rnd(r.right + 12) : rnd(r.bottom + 12);
+            fixes.push({ set: { mid: before }, on: 'arrows[' + arr.index + ']', why: 'route the middle leg before the obstacle' });
+            fixes.push({ set: { mid: after }, on: 'arrows[' + arr.index + ']', why: 'route the middle leg after the obstacle' });
+          } else {
+            // a straight or end leg: slide the anchor along its edge so the
+            // run clears the obstacle, on whichever side is nearer
+            var isH = seg.axis === 'h';
+            var pos = isH ? seg.y1 : seg.x1;
+            var lo = isH ? r.top : r.left, hi = isH ? r.bottom : r.right;
+            var toLo = rnd(lo - 8 - pos), toHi = rnd(hi + 8 - pos);
+            var delta = Math.abs(toLo) <= Math.abs(toHi) ? toLo : toHi;
+            var end = si === 0 ? 'from' : 'to';
+            fixes.push({
+              nudgeAnchor: { end: end, by: delta },
+              on: 'arrows[' + arr.index + '].' + end,
+              why: 'append :' + delta + ' to the anchor (e.g. "' + arr.spec[end].split(':').slice(0, 2).join(':') + ':' + delta + '") so the run passes ' + (delta < 0 ? 'before' : 'after') + ' it',
+            });
+            var nid = nodeIdOf(r.el);
+            if (nid) fixes.push({ move: 'nodes[id=' + nid + ']', why: 'or move the node out of the corridor' });
           }
+          out.push(diag(
+            'arrow/crosses', 'error', arrowRef(arr),
+            arrowRef(arr) + ' crosses ' + subjectOf(r),
+            { segment: si, obstacle: { left: rnd(r.left), top: rnd(r.top), right: rnd(r.right), bottom: rnd(r.bottom) } },
+            fixes
+          ));
         });
       });
     });
@@ -307,15 +386,40 @@
         var rev = [b.el.className, describe(b.el), a.el.className, describe(a.el)].join('|');
         if (seen[rev]) return;
         seen[key] = true;
-        issues.push(
-          a.el.className + ' ' + describe(a.el) + ' overlaps ' + b.el.className + ' ' + describe(b.el)
-        );
+
+        var dyUp = rnd(b.top - a.bottom - 6), dyDown = rnd(b.bottom - a.top + 6);
+        var dxLeft = rnd(b.left - a.right - 6), dxRight = rnd(b.right - a.left + 6);
+        var fixes = [];
+        var isArrowLabel = /arrow-label/.test(a.el.className);
+        if (isArrowLabel) {
+          var edge = a.el.getAttribute('data-edge');
+          var dy = Math.abs(dyUp) <= Math.abs(dyDown) ? dyUp : dyDown;
+          var dx = Math.abs(dxLeft) <= Math.abs(dxRight) ? dxLeft : dxRight;
+          var on = 'arrows[' + edge + ']';
+          if (Math.abs(dy) <= Math.abs(dx)) fixes.push({ set: { labelDy: dy }, on: on, why: 'shift the label vertically clear' });
+          else fixes.push({ set: { labelDx: dx }, on: on, why: 'shift the label horizontally clear' });
+          fixes.push({ shorten: on + '.label', why: 'or shorten the wording — never delete it, the label is data' });
+        } else {
+          var n = a.el.textContent.trim();
+          var cx = rnd(a.left), cy = rnd(a.top);
+          var candY = Math.abs(dyUp) <= Math.abs(dyDown) ? cy + dyUp : cy + dyDown;
+          var candX = Math.abs(dxLeft) <= Math.abs(dxRight) ? cx + dxLeft : cx + dxRight;
+          fixes.push({ set: { at: [cx, candY] }, on: 'steps[n=' + n + ']', why: 'move the badge above/below the collision' });
+          fixes.push({ set: { at: [candX, cy] }, on: 'steps[n=' + n + ']', why: 'or beside it' });
+        }
+        out.push(diag(
+          'overlap/' + (isArrowLabel ? 'arrow-label' : 'step'), 'error', subjectOf(a),
+          subjectOf(a) + ' overlaps ' + subjectOf(b),
+          { a: { left: rnd(a.left), top: rnd(a.top), right: rnd(a.right), bottom: rnd(a.bottom) },
+            b: { left: rnd(b.left), top: rnd(b.top), right: rnd(b.right), bottom: rnd(b.bottom) } },
+          fixes
+        ));
       });
     });
 
     // 3) parallel runs of different arrows closer than MIN_SPACING
-    for (var i = 0; i < drawn.length; i++) {
-      for (var j = i + 1; j < drawn.length; j++) {
+    for (var i = 0; i < live.length; i++) {
+      for (var j = i + 1; j < live.length; j++) {
         (function (A, B) {
           A.segs.forEach(function (s1) {
             B.segs.forEach(function (s2) {
@@ -332,30 +436,51 @@
               }
               var overlap = Math.min(o1b, o2b) - Math.max(o1a, o2a);
               if (d > 0.5 && d < MIN_SPACING && overlap > 20) {
-                issues.push(
-                  'arrows #' + A.index + ' and #' + B.index + ' run parallel only ' +
-                    Math.round(d) + 'px apart (need ' + MIN_SPACING + ')'
-                );
+                var need = Math.ceil(MIN_SPACING - d);
+                out.push(diag(
+                  'arrows/too-close', 'error', arrowRef(A) + ' & ' + arrowRef(B),
+                  'parallel runs of arrows[' + A.index + '] and arrows[' + B.index + '] are ' + rnd(d) + 'px apart (need ' + MIN_SPACING + ')',
+                  { distance: rnd(d), required: MIN_SPACING, overlapLength: rnd(overlap) },
+                  [
+                    { nudgeAnchor: { end: 'both', by: need }, on: 'arrows[' + B.index + ']', why: 'offset both anchors of one arrow by ' + need + 'px along their edges (e.g. "a:right:' + need + '" and "b:left:' + need + '")' },
+                    { move: 'a node', why: 'or separate the nodes so the runs are on different rows' },
+                  ]
+                ));
               }
             });
           });
-        })(drawn[i], drawn[j]);
+        })(live[i], live[j]);
       }
     }
 
     // 4) everything stays on the canvas and out of the callout panel
     obstacles.forEach(function (r) {
       if (r.right > panelLeft - 4) {
-        issues.push(r.el.className + ' ' + describe(r.el) + ' intrudes into the callout panel');
+        out.push(diag(
+          'bounds/panel', 'error', subjectOf(r),
+          subjectOf(r) + ' intrudes into the callout panel',
+          { right: rnd(r.right), panelLeft: rnd(panelLeft) },
+          [{ moveLeftBy: rnd(r.right - panelLeft + 12), why: 'move it left by at least this much' }]
+        ));
       }
       if (r.left < 0 || r.top < 0 || r.bottom > CANVAS_H) {
-        issues.push(r.el.className + ' ' + describe(r.el) + ' is outside the canvas');
+        out.push(diag(
+          'bounds/canvas', 'error', subjectOf(r),
+          subjectOf(r) + ' is outside the canvas',
+          { left: rnd(r.left), top: rnd(r.top), bottom: rnd(r.bottom), canvas: [CANVAS_W, CANVAS_H] },
+          [{ move: 'inside 0..' + CANVAS_W + ' x 0..' + CANVAS_H }]
+        ));
       }
     });
-    drawn.forEach(function (arr) {
+    live.forEach(function (arr) {
       arr.segs.forEach(function (s) {
         if (Math.max(s.x1, s.x2) > panelLeft - 4) {
-          issues.push('arrow #' + arr.index + ' reaches into the callout panel');
+          out.push(diag(
+            'bounds/panel', 'error', arrowRef(arr),
+            arrowRef(arr) + ' reaches into the callout panel',
+            { right: rnd(Math.max(s.x1, s.x2)), panelLeft: rnd(panelLeft) },
+            [{ move: 'the node it points at', why: 'left of x=' + rnd(panelLeft - 40) }]
+          ));
         }
       });
     });
@@ -368,23 +493,60 @@
       panel.querySelectorAll('.num').forEach(function (el) { panelNums.push(el.textContent.trim()); });
       panelNums.sort();
       if (canvasNums.join(',') !== panelNums.join(',')) {
-        issues.push(
-          'step numbers on canvas [' + canvasNums + '] differ from the callout panel [' + panelNums + ']'
-        );
+        out.push(diag(
+          'steps/mismatch', 'error', 'steps',
+          'step numbers on the canvas [' + canvasNums + '] differ from the callout panel [' + panelNums + ']',
+          { canvas: canvasNums, panel: panelNums },
+          [{ why: 'every steps[] entry needs an "at" unless onCanvas is false' }]
+        ));
       }
     }
 
-    return issues;
+    // 6) composition: a diagram that uses only the top of the page reads as
+    //    unfinished. Advisory — a five-step linear flow is legitimately short.
+    var content = labels.concat(icons, grpLabels, notes);
+    document.querySelectorAll('.grp').forEach(function (el) { if (!isGhost(el)) content.push(rectOf(el)); });
+    if (content.length) {
+      var top = Math.min.apply(null, content.map(function (r) { return r.top; }));
+      var bottom = Math.max.apply(null, content.map(function (r) { return r.bottom; }));
+      var titleRule = document.querySelector('.title-rule');
+      var usableTop = titleRule ? rectOf(titleRule).bottom + 20 : 160;
+      var usableBottom = CANVAS_H - 90; // above the footer
+      var used = (bottom - top) / (usableBottom - usableTop);
+      if (used < 0.55) {
+        out.push(diag(
+          'layout/empty-band', 'warning', 'canvas',
+          'the diagram uses ' + Math.round(used * 100) + '% of the drawing height; the lower band is empty',
+          { contentTop: rnd(top), contentBottom: rnd(bottom), usableTop: rnd(usableTop), usableBottom: rnd(usableBottom) },
+          [
+            { why: 'spread rows further apart, or add the supporting tier (observability, secrets, backups) that the prose already mentions' },
+            { why: 'a short linear flow may be fine as-is — this is advisory' },
+          ]
+        ));
+      }
+    }
+
+    return out;
   }
 
-  function report(issues) {
-    if (!issues.length) {
-      console.log('DIAGRAM-VALIDATION: PASS');
+  function report(diagnostics) {
+    var errors = diagnostics.filter(function (d) { return d.severity === 'error'; });
+    var warnings = diagnostics.filter(function (d) { return d.severity === 'warning'; });
+
+    // Machine-readable channel: the CLI reads this element out of --dump-dom.
+    var sink = document.createElement('script');
+    sink.type = 'application/json';
+    sink.id = 'diagram-diagnostics';
+    sink.textContent = JSON.stringify({ errors: errors, warnings: warnings });
+    document.body.appendChild(sink);
+
+    if (!errors.length) {
+      console.log('DIAGRAM-VALIDATION: PASS' + (warnings.length ? ' (' + warnings.length + ' warning)' : ''));
       document.title = 'PASS - ' + document.title;
       return;
     }
-    console.error('DIAGRAM-VALIDATION: FAIL', JSON.stringify(issues, null, 2));
-    document.title = 'FAIL(' + issues.length + ') - ' + document.title;
+    console.error('DIAGRAM-VALIDATION: FAIL', JSON.stringify(errors, null, 2));
+    document.title = 'FAIL(' + errors.length + ') - ' + document.title;
     var banner = document.createElement('div');
     banner.id = 'diagram-validation-banner';
     banner.setAttribute(
@@ -394,17 +556,22 @@
         'padding:10px 14px;border-radius:4px;white-space:pre-wrap;'
     );
     banner.textContent =
-      'VALIDATION FAILED (' + issues.length + ')\n' +
-      issues.slice(0, 8).map(function (s) { return '• ' + s; }).join('\n') +
-      (issues.length > 8 ? '\n… +' + (issues.length - 8) + ' more (see console)' : '');
+      'VALIDATION FAILED (' + errors.length + ')\n' +
+      errors.slice(0, 8).map(function (d) { return '• ' + d.message; }).join('\n') +
+      (errors.length > 8 ? '\n… +' + (errors.length - 8) + ' more (see console)' : '');
     document.body.appendChild(banner);
   }
 
   try {
     var drawn = draw();
-    var issues = validate(drawn);
-    window.__DIAGRAM__ = { drawn: drawn, issues: issues, config: CFG };
-    report(issues);
+    var diagnostics = validate(drawn);
+    window.__DIAGRAM__ = {
+      drawn: drawn,
+      diagnostics: diagnostics,
+      issues: diagnostics.filter(function (d) { return d.severity === 'error'; }).map(function (d) { return d.message; }),
+      config: CFG,
+    };
+    report(diagnostics);
     document.documentElement.setAttribute('data-diagram-ready', '1');
   } catch (e) {
     document.title = 'FAIL(script) - ' + document.title;
@@ -417,7 +584,13 @@
     );
     b.textContent = 'diagram-lib error: ' + e.message;
     document.body.appendChild(b);
-    window.__DIAGRAM__ = { drawn: [], issues: ['script error: ' + e.message], config: CFG };
+    var err = diag('runtime/script', 'error', 'diagram-lib', 'script error: ' + e.message, {}, []);
+    var sink = document.createElement('script');
+    sink.type = 'application/json';
+    sink.id = 'diagram-diagnostics';
+    sink.textContent = JSON.stringify({ errors: [err], warnings: [] });
+    document.body.appendChild(sink);
+    window.__DIAGRAM__ = { drawn: [], diagnostics: [err], issues: [err.message], config: CFG };
     console.error(e);
   }
 })();
