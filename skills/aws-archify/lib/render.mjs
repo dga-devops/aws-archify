@@ -5,7 +5,7 @@
  * browser can render it, which is the whole reason the format is HTML.
  */
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
@@ -49,6 +49,13 @@ export function findBrowser() {
   return found;
 }
 
+/** True only when `p` is a non-empty regular file. */
+function wrote(p) {
+  if (!existsSync(p)) return false;
+  const st = statSync(p);
+  return st.isFile() && st.size > 0;
+}
+
 const BASE_FLAGS = [
   '--headless=new',
   '--disable-gpu',
@@ -78,9 +85,12 @@ export async function screenshot(htmlPath, pngPath, opts) {
   ];
   await run(browser, args, { maxBuffer: 64 * 1024 * 1024 }).catch((e) => {
     // Chrome exits non-zero on some platforms even after writing the PNG.
-    if (!existsSync(pngPath)) throw e;
+    if (!wrote(pngPath)) throw e;
   });
-  if (!existsSync(pngPath)) throw new Error(`Chrome did not write ${pngPath}`);
+  // Existence alone is not proof: point --screenshot at a directory and Chrome
+  // writes nothing while the path still "exists", which once reported success
+  // for an empty output.
+  if (!wrote(pngPath)) throw new Error(`Chrome did not write a PNG at ${pngPath}`);
   return pngPath;
 }
 

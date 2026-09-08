@@ -30,14 +30,42 @@ CLI=<skill dir>/bin/aws-archify.mjs
 node $CLI init my-diagram.json          # starter spec
 node $CLI icons "secrets manager"       # find an icon name
 node $CLI validate my-diagram.json      # contract + geometry, writes nothing
-node $CLI deliver  my-diagram.json out/ # PNG + live HTML
+
+node $CLI render   my-diagram.json out/ # PNG only        -> docs, slides, print
+node $CLI live     my-diagram.json out/ # interactive only -> share, explain
+node $CLI deliver  my-diagram.json out/ # both
 ```
 
 `validate` and `deliver` exit non-zero when the geometry fails, and print every
 problem with the node ids involved. Fix and re-run — do not pass `--force`
 unless the user explicitly asks for a broken render to look at.
 
-### 1. Get the facts before drawing
+### 1. Decide which output to produce
+
+Three commands, one spec. Pick from what the diagram is for — the request
+usually says, so read it before asking:
+
+| The user says something like | Command | Produces |
+|---|---|---|
+| "put it in the doc", "for the slide deck", "attach to the ticket", "print it" | `render` | PNG only |
+| "walk the team through it", "send them something they can click", "explain the flow", "show me how traffic moves" | `live` | interactive HTML only |
+| a plain "draw me a diagram of X", or nothing that hints either way | `deliver` | both |
+
+Two cases where you should stop and ask instead of guessing:
+
+- **A batch.** Before generating several diagrams at once, ask once which output
+  they want and apply it to all of them. Producing 13 unwanted HTML files is
+  worse than one question.
+- **A repository that commits its outputs.** If the diagrams land in a docs repo
+  or anywhere under version control, ask before adding a second artefact per
+  diagram. Someone has to review and carry those files.
+
+Never ask twice in one session: the answer holds until the user changes it.
+
+When you do produce both, say which file is which in one line — the PNG for the
+document, the HTML to share — so the user is not left guessing why there are two.
+
+### 2. Get the facts before drawing
 
 Every value — account id, resource name, CIDR, threshold, region — comes from
 the source the user points at (design docs, IaC, console output). **Do not
@@ -47,7 +75,7 @@ If sources disagree, say so in your report and ask the owner to check against
 the real config. Never pick a side silently: a diagram is read as authoritative
 long after the conversation is forgotten.
 
-### 2. Write the spec
+### 3. Write the spec
 
 Three examples ship with the skill:
 
@@ -61,7 +89,7 @@ Layout is explicit pixels, because the AWS format is a designed page, not a
 graph dump. Work outside-in: place boundaries, then nodes on a grid, then
 declare arrows, then number the steps.
 
-### 3. Validate, then look at it
+### 4. Validate, then look at it
 
 `validate` catches geometry. It cannot catch "wrong icon", "steps out of order"
 or "this doesn't explain anything". So after it passes, **open the PNG and zoom

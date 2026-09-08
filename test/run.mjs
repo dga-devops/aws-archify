@@ -5,7 +5,9 @@
  * a bad spec that builds anyway, and a route that is not orthogonal — plus one
  * end-to-end render of the real example.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -220,6 +222,31 @@ t('examples: an example never carries real infrastructure', () => {
 
     ok(/fictional|example/i.test(raw), `${f}: must say somewhere that it is an example`);
   }
+});
+
+// ---------- CLI output paths ----------
+// `live` needs no browser, so it can prove the directory handling cheaply.
+// Passing a directory used to hand Chrome a directory as its screenshot target:
+// nothing was written and the run still reported success.
+t('cli: a directory argument becomes a file inside it', () => {
+  const CLI = join(HERE, '..', 'skills', 'aws-archify', 'bin', 'aws-archify.mjs');
+  const spec = join(EX, 'starter.json');
+
+  for (const suffix of ['/', '']) {
+    const dir = mkdtempSync(join(tmpdir(), 'aws-archify-test-'));
+    execFileSync(process.execPath, [CLI, 'live', spec, dir + suffix], { stdio: 'pipe' });
+    const written = join(dir, 'starter.live.html');
+    const st = statSync(written);
+    ok(st.isFile() && st.size > 1000, `dir arg ${JSON.stringify(suffix)}: expected a real file at ${written}`);
+  }
+});
+
+t('cli: an explicit file name is still honoured', () => {
+  const CLI = join(HERE, '..', 'skills', 'aws-archify', 'bin', 'aws-archify.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'aws-archify-test-'));
+  const target = join(dir, 'custom-name.html');
+  execFileSync(process.execPath, [CLI, 'live', join(EX, 'starter.json'), target], { stdio: 'pipe' });
+  ok(statSync(target).isFile(), 'explicit file name honoured');
 });
 
 // ---------- report ----------

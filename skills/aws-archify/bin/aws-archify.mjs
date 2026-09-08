@@ -11,7 +11,7 @@
  *   init     [out.json]               a working starter spec
  *   doctor                            check this machine can render
  */
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -74,10 +74,19 @@ function loadSpec(p) {
   }
 }
 
+/**
+ * Where to write. `given` may be a file path or a directory — a trailing
+ * separator, or a path that already exists as one. Passing a directory used to
+ * hand Chrome a directory as its --screenshot target, which fails silently and
+ * still looked like a success.
+ */
 function outPath(given, specFile, ext, dir) {
-  if (given) return resolve(given);
-  const base = basename(specFile, extname(specFile));
-  return resolve(dir || dirname(specFile), base + ext);
+  const base = basename(specFile, extname(specFile)) + ext;
+  if (!given) return resolve(dir || dirname(specFile), base);
+
+  const looksLikeDir =
+    /[\\/]$/.test(given) || (existsSync(given) && statSync(given).isDirectory());
+  return looksLikeDir ? resolve(given, base) : resolve(given);
 }
 
 function write(path, content) {
