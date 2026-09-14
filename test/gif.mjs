@@ -237,9 +237,11 @@ export function register(t, { ok, eq, throws }) {
   });
 
   t('cli: gif writes a looping GIF whose first frame is the still diagram', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'aws-archify-test-'));
+    // The output directory does not exist yet. v2.3.0 failed here with ENOENT:
+    // the candidate file was written without creating its directory first.
+    const dir = join(mkdtempSync(join(tmpdir(), 'aws-archify-test-')), 'not', 'yet');
     const out = join(dir, 'starter.gif');
-    execFileSync(process.execPath, [CLI, 'gif', join(EX, 'starter.json'), out, '--width=480', '--fps=10'], { stdio: 'pipe', timeout: 120000 });
+    execFileSync(process.execPath, [CLI, 'gif', join(EX, 'starter.json'), dir + '/', '--width=480', '--fps=10'], { stdio: 'pipe', timeout: 120000 });
     const g = readGif(readFileSync(out));
     eq(`${g.width}x${g.height}`, '480x270', 'output size');
     eq(g.loop, 0, 'loops forever');

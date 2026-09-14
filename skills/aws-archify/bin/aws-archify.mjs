@@ -30,7 +30,7 @@ import { buildPalette, createGifEncoder } from '../lib/gif.mjs';
 import { pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG = '2.3.0';
+const PKG = '2.3.1';
 
 // ---------- tiny arg parser ----------
 const argv = process.argv.slice(2);
@@ -480,6 +480,8 @@ async function cmdGif() {
     if (process.stdout.isTTY) process.stdout.write('\r');
 
     const bytes = enc.finish();
+    // the candidate sits beside the target, so its directory must exist first
+    mkdirSync(dirname(cand), { recursive: true });
     writeFileSync(cand, bytes);
     commit(cand, out);
 
