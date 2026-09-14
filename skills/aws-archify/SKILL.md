@@ -1,6 +1,7 @@
 ---
 name: aws-archify
 description: Create or edit AWS Reference Architecture diagrams from a JSON spec. Produces a print-ready 1920x1080 PNG for docs and slides, and on request an interactive HTML viewer (signal-flow trace, node focus, route tracing, dark theme) or a looping animated GIF of data flowing through the steps. Use whenever asked to draw, update, review or explain an AWS architecture diagram, a VPC/network topology, or a service data flow.
+argument-hint: "[png|live|gif|card|deliver|diff|validate] [spec.json]"
 ---
 
 # aws-archify
@@ -17,6 +18,35 @@ One JSON spec, several outputs that can never disagree:
 All of them come from the same layout engine and the same arrow router, so a
 moving version is the printed version with a clock on it.
 
+## Invoked as a command
+
+Arguments passed this time: `$ARGUMENTS`
+
+If that is empty, this is an ordinary request — skip to the workflow below.
+Otherwise the user typed `/aws-archify <format> [spec]`, which is an explicit
+instruction, so act on it directly:
+
+| First argument | Run | Then |
+|---|---|---|
+| `png` | `render` | show the PNG |
+| `live` | `live` | give the path to the HTML file |
+| `gif` | `gif` | say it takes about 20 s before starting |
+| `card` | `card` | show the card |
+| `deliver` | `deliver` | list the PNG, HTML and receipt |
+| `diff` | `diff <before> <after>` | needs two spec paths; ask for the second if only one is given |
+| `validate` | `validate` | report every diagnostic with its suggested fix |
+
+**Which spec.** The second argument, when given. Otherwise the spec this
+conversation has been working on — the one most recently written or rendered.
+If there is none, or two diagrams are equally recent, ask which one in a single
+line. Never pick between two diagrams silently.
+
+A format given as an argument skips the PNG-first step and the one-line offer
+of other formats; the user already said what they want. Everything else still
+applies: validate first, and never pass `--force` on your own.
+
+An unknown first argument: reply with the valid ones in one line and stop.
+
 ## The one rule that matters
 
 **Never hand-write the HTML or the SVG.** Write JSON, run the CLI. The router
@@ -27,7 +57,7 @@ runs are too close to read. Hand-drawn SVG bypasses all of that.
 ## Workflow
 
 ```bash
-CLI=<skill dir>/bin/aws-archify.mjs
+CLI="${CLAUDE_SKILL_DIR}/bin/aws-archify.mjs"   # the directory holding this SKILL.md
 
 node $CLI init my-diagram.json          # starter spec
 node $CLI icons "secrets manager"       # find an icon name

@@ -55,6 +55,24 @@ happy with it. Then offer the interactive page or the GIF — both are built fro
 the spec that was just approved, so their content needs no second review. If
 someone asks for a GIF up front, they get a GIF.
 
+### As a slash command
+
+In Claude Code the skill is also a command. Talk to it normally, or name the
+output directly:
+
+```
+/aws-archify                          draw or edit a diagram, conversationally
+/aws-archify live                     interactive HTML of the diagram just worked on
+/aws-archify gif web-app.json         looping GIF of a specific spec
+/aws-archify card                     1200×630 share card
+/aws-archify diff as-is.json to-be.json
+```
+
+The first argument is the output (`png`, `live`, `gif`, `card`, `deliver`,
+`diff`, `validate`); the second, optional, is the spec. Without one, the agent
+uses the spec the conversation has been working on, and asks if that is
+ambiguous. Naming a format skips the PNG-first round — you said what you want.
+
 ## Design decisions
 
 **JSON is the source.** Not HTML. An agent can edit a spec reliably, a diff of a

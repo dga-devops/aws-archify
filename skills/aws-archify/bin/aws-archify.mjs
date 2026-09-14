@@ -30,7 +30,7 @@ import { buildPalette, createGifEncoder } from '../lib/gif.mjs';
 import { pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG = '2.3.1';
+const PKG = '2.4.0';
 
 // ---------- tiny arg parser ----------
 const argv = process.argv.slice(2);
