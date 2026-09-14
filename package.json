@@ -1,6 +1,6 @@
 {
   "name": "aws-archify",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "AWS Reference Architecture diagrams from a JSON spec: a print-ready PNG, an interactive viewer and a looping GIF, all from one source",
   "license": "MIT",
   "type": "module",

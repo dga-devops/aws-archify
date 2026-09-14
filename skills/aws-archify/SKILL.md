@@ -22,9 +22,10 @@ moving version is the printed version with a clock on it.
 
 Arguments passed this time: `$ARGUMENTS`
 
-If that is empty, this is an ordinary request — skip to the workflow below.
-Otherwise the user typed `/aws-archify <format> [spec]`, which is an explicit
-instruction, so act on it directly:
+If that is empty — or shows an unfilled placeholder, as it does outside Claude
+Code — this is an ordinary request: skip to the workflow below. Otherwise the
+user typed `/aws-archify <format> [spec]`, which is an explicit instruction, so
+act on it directly:
 
 | First argument | Run | Then |
 |---|---|---|

@@ -9,6 +9,8 @@
  *   deliver  <spec.json> [outdir]     render + live + receipt, what you ship
  *   diff     <before> <after> [dir]   one picture of what changed between two specs
  *   card     <spec.json> [out.png]    1200x630 share card (Open Graph) for a post or article
+ *   gif      <spec.json> [out.gif]    looping GIF of data flowing through the steps
+ *   pack     [out.zip]                this skill as a ZIP that Claude's "Upload skill" accepts
  *   icons    <query>                  search the bundled AWS icon set
  *   init     [out.json]               a working starter spec
  *   doctor                            check this machine can render
@@ -27,10 +29,12 @@ import { compareSpecs } from '../lib/diff.mjs';
 import { launchPage } from '../lib/cdp.mjs';
 import { decodePng } from '../lib/png.mjs';
 import { buildPalette, createGifEncoder } from '../lib/gif.mjs';
+import { createZip } from '../lib/zip.mjs';
 import { pathToFileURL } from 'node:url';
+import { readdirSync } from 'node:fs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG = '2.4.0';
+const PKG = '2.5.0';
 
 // ---------- tiny arg parser ----------
 const argv = process.argv.slice(2);
@@ -229,6 +233,7 @@ function usage() {
   ${c.bold('diff')}     <before> <after> [dir]  one picture of what changed between two specs
   ${c.bold('card')}     <spec.json> [out.png]  1200x630 share card for a link preview or a post
   ${c.bold('gif')}      <spec.json> [out.gif]  looping GIF of data flowing through the steps
+  ${c.bold('pack')}     [out.zip]              this skill as a ZIP for Claude's "Upload skill"
   ${c.bold('icons')}    <query>                search the 862 bundled AWS icons
   ${c.bold('init')}     [out.json]             a working starter spec
   ${c.bold('doctor')}                          check this machine can render
@@ -500,6 +505,91 @@ async function cmdGif() {
   process.exit(ok ? 0 : 2);
 }
 
+// ---------- pack: a ZIP that Claude's skill upload accepts ----------
+// `npx skills add` copies files onto the user's own machine and checks
+// nothing. Uploading a skill to Claude (Settings > Skills) goes to a server
+// that validates: the skill folder at the root of the archive, only the
+// frontmatter keys it knows, and file names without spaces or punctuation.
+// GitHub's "Download ZIP" of this repository fails all three.
+
+const UPLOAD_KEYS = new Set(['name', 'description', 'license', 'allowed-tools', 'compatibility', 'metadata']);
+const SAFE_PATH = /^[A-Za-z0-9._\-/]+$/;
+const PACK_SKIP = /(^|\/)(\.out|node_modules)(\/|$)|\.candidate\./;
+
+/** Keep only frontmatter keys the upload accepts, and add the two that help there. */
+function uploadFrontmatter(md) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(md);
+  if (!m) throw new Error('SKILL.md has no frontmatter');
+  const kept = [], dropped = [];
+  let current = null;
+  for (const line of m[1].split(/\r?\n/)) {
+    const key = /^([A-Za-z][\w-]*):/.exec(line);
+    if (key) {
+      current = UPLOAD_KEYS.has(key[1]) ? 'keep' : 'drop';
+      (current === 'keep' ? kept : dropped).push(current === 'keep' ? line : key[1]);
+    } else if (current === 'keep') {
+      kept.push(line); // continuation of a kept multi-line value
+    }
+  }
+  const has = (k) => kept.some((l) => l.startsWith(k + ':'));
+  if (!has('license')) kept.push('license: "MIT; bundled AWS Architecture Icons are under AWS terms, see THIRD_PARTY_NOTICES.md"');
+  if (!has('compatibility')) {
+    kept.push('compatibility: "Needs Node.js 22+ and Chrome or Edge, run headless. Without a browser only HTML output and spec checks work: no PNG, no GIF, no geometry validation."');
+  }
+  const name = (/^name:\s*(.+)$/m.exec(kept.join('\n')) || [])[1]?.trim().replace(/^["']|["']$/g, '');
+  const desc = (/^description:\s*(.+)$/m.exec(kept.join('\n')) || [])[1]?.trim();
+  return { text: `---\n${kept.join('\n')}\n---\n` + md.slice(m[0].length), dropped, name, desc };
+}
+
+function walk(dir, rel = '') {
+  const out = [];
+  for (const ent of readdirSync(join(dir, rel), { withFileTypes: true })) {
+    const r = rel ? `${rel}/${ent.name}` : ent.name;
+    if (PACK_SKIP.test(r)) continue;
+    if (ent.isDirectory()) out.push({ dir: true, rel: r }, ...walk(dir, r));
+    else out.push({ dir: false, rel: r });
+  }
+  return out;
+}
+
+function cmdPack() {
+  const skillDir = resolve(HERE, '..');
+  const folder = 'aws-archify';
+  const out = resolve(positional[0] || `${folder}.zip`);
+
+  const fm = uploadFrontmatter(readFileSync(join(skillDir, 'SKILL.md'), 'utf8'));
+  const problems = [];
+  if (fm.name !== folder) problems.push(`skill name "${fm.name}" must equal the folder name "${folder}"`);
+  if (!/^[a-z0-9-]{1,64}$/.test(fm.name || '')) problems.push('skill name must be 1-64 lowercase letters, digits or hyphens');
+  if (!fm.desc || fm.desc.length > 1024) problems.push(`description must be 1-1024 characters (is ${fm.desc?.length ?? 0})`);
+
+  const files = walk(skillDir);
+  for (const f of files) {
+    if (!SAFE_PATH.test(f.rel)) problems.push(`path has characters the upload rejects: ${f.rel}`);
+  }
+  if (problems.length) die('cannot pack:\n' + problems.map((p) => '  - ' + p).join('\n'));
+
+  const entries = [{ name: `${folder}/` }];
+  let bytes = 0;
+  for (const f of files) {
+    if (f.dir) { entries.push({ name: `${folder}/${f.rel}/` }); continue; }
+    const data = f.rel === 'SKILL.md' ? Buffer.from(fm.text, 'utf8') : readFileSync(join(skillDir, f.rel));
+    bytes += data.length;
+    entries.push({ name: `${folder}/${f.rel}`, data });
+  }
+
+  const zip = createZip(entries);
+  const cand = candidatePath(out);
+  mkdirSync(dirname(cand), { recursive: true });
+  writeFileSync(cand, zip);
+  commit(cand, out);
+
+  const fileCount = files.filter((f) => !f.dir).length;
+  console.log(c.green('wrote ') + rel(out) + c.dim(`  (${fileCount} files, ${(bytes / 1048576).toFixed(1)} MB -> ${(zip.length / 1048576).toFixed(1)} MB zipped)`));
+  console.log(c.dim(`  root folder "${folder}/" · SKILL.md frontmatter: ${fm.dropped.length ? 'dropped ' + fm.dropped.join(', ') + ' (Claude Code only)' : 'unchanged'}, added license + compatibility`));
+  console.log(c.dim('  upload it in Claude: Settings > Capabilities > Skills > Upload skill'));
+}
+
 async function cmdDiff() {
   const beforeArg = positional[0], afterArg = positional[1];
   if (!beforeArg || !afterArg) die('usage: aws-archify diff <before.json> <after.json> [outdir]');
@@ -640,6 +730,7 @@ const table = {
   diff: cmdDiff,
   card: cmdCard,
   gif: cmdGif,
+  pack: cmdPack,
   icons: cmdIcons,
   init: cmdInit,
   doctor: cmdDoctor,

@@ -22,6 +22,18 @@ How this repository uses them:
 AWS refreshes the set periodically. Re-download from the link above rather than
 editing anything under `aws-icons/`; the file names are the resolver's index.
 
+Three file names differ from the AWS download, because Claude's skill upload
+rejects spaces and `&` in paths. The artwork is byte-for-byte unchanged:
+
+| AWS file name | Here |
+|---|---|
+| `Res_Amazon-Location-Service_Map _48.svg` | `Res_Amazon-Location-Service_Map_48.svg` |
+| `Res_Amazon-Location-Service_Track _48.svg` | `Res_Amazon-Location-Service_Track_48.svg` |
+| `Arch_AWS-Elemental-Appliances-&-Software_64.svg` | `Arch_AWS-Elemental-Appliances-and-Software_64.svg` |
+
+After refreshing the set, run the test suite: it fails on any path with a
+character the upload would reject.
+
 Icon set release bundled here: **2026-04-30** (see `aws-icons/index.json`).
 
 ## archify

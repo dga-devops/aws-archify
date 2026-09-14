@@ -73,6 +73,29 @@ The first argument is the output (`png`, `live`, `gif`, `card`, `deliver`,
 uses the spec the conversation has been working on, and asks if that is
 ambiguous. Naming a format skips the PNG-first round — you said what you want.
 
+### In Claude chat (desktop, web, mobile)
+
+`npx skills add` installs onto your own machine, for Claude Code and the other
+coding agents. Claude's regular chat takes skills a different way — as a ZIP
+uploaded under **Settings › Capabilities › Skills** — and validates it: the
+skill folder at the root, only the frontmatter keys it knows, no spaces or
+punctuation in file names. GitHub's "Download ZIP" of this repository fails all
+three. Use the one attached to each release instead:
+
+**[Download aws-archify.zip](https://github.com/dga-devops/aws-archify/releases/latest/download/aws-archify.zip)**
+— then Claude › Settings › Capabilities › Skills › Upload skill.
+
+Or build it yourself from a checkout, which produces the same bytes:
+
+```bash
+node skills/aws-archify/bin/aws-archify.mjs pack     # -> aws-archify.zip
+```
+
+One caveat, stated plainly: an uploaded skill runs in Claude's cloud sandbox,
+not on your machine. PNG, GIF and geometry validation need Chrome or Edge; if
+the sandbox has no browser, only the HTML output and spec checks will work
+there. Ask it to run `doctor` after uploading to see what it has.
+
 ## Design decisions
 
 **JSON is the source.** Not HTML. An agent can edit a spec reliably, a diff of a

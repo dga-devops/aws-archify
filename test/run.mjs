@@ -257,6 +257,10 @@ register(t, { ok, eq, throws });
 const gifTests = await import('./gif.mjs');
 gifTests.register(t, { ok, eq, throws });
 
+// ---------- packaging for Claude's skill upload ----------
+const packTests = await import('./pack.mjs');
+packTests.register(t, { ok, eq, throws });
+
 // ---------- report ----------
 console.log(`\n  ${pass} passed, ${failures.length} failed\n`);
 for (const f of failures) console.error('  FAIL  ' + f + '\n');

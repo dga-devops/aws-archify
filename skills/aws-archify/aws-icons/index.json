@@ -1003,7 +1003,7 @@
    "name": "Amazon Location Service / Map",
    "type": "resource",
    "category": "Front End Web Mobile",
-   "path": "aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Map _48.svg"
+   "path": "aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Map_48.svg"
   },
   {
    "name": "Amazon Location Service / Place",
@@ -1021,7 +1021,7 @@
    "name": "Amazon Location Service / Track",
    "type": "resource",
    "category": "Front End Web Mobile",
-   "path": "aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Track _48.svg"
+   "path": "aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Track_48.svg"
   },
   {
    "name": "AWS Management Console / 48 / Light",
@@ -4674,7 +4674,7 @@
    "name": "AWS Elemental Appliances & Software",
    "type": "service",
    "category": "Media Services",
-   "path": "aws-icons/service/Media-Services/Arch_AWS-Elemental-Appliances-&-Software_64.svg"
+   "path": "aws-icons/service/Media-Services/Arch_AWS-Elemental-Appliances-and-Software_64.svg"
   },
   {
    "name": "AWS Elemental Conductor",

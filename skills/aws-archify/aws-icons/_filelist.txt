@@ -163,10 +163,10 @@ aws-icons/resource/Databases/Res_Amazon-RDS_Trusted-Language-Extensions-for-Post
 aws-icons/resource/Developer-Tools/Res_AWS-Cloud9_Cloud9_48.svg
 aws-icons/resource/Front-End-Web-Mobile/Res_AWS-Amplify_AWS-Amplify-Studio_48.svg
 aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Geofence_48.svg
-aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Map _48.svg
+aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Map_48.svg
 aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Place_48.svg
 aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Routes_48.svg
-aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Track _48.svg
+aws-icons/resource/Front-End-Web-Mobile/Res_Amazon-Location-Service_Track_48.svg
 aws-icons/resource/General-Icons/Res_AWS-Management-Console_48_Light.svg
 aws-icons/resource/General-Icons/Res_Alert_48_Light.svg
 aws-icons/resource/General-Icons/Res_Authenticated-User_48_Light.svg
@@ -767,7 +767,7 @@ aws-icons/service/Management-Tools/Arch_Amazon-CloudWatch_64.svg
 aws-icons/service/Management-Tools/Arch_Amazon-Managed-Grafana_64.svg
 aws-icons/service/Management-Tools/Arch_Amazon-Managed-Service-for-Prometheus_64.svg
 aws-icons/service/Media-Services/Arch_AWS-Deadline-Cloud_64.svg
-aws-icons/service/Media-Services/Arch_AWS-Elemental-Appliances-&-Software_64.svg
+aws-icons/service/Media-Services/Arch_AWS-Elemental-Appliances-and-Software_64.svg
 aws-icons/service/Media-Services/Arch_AWS-Elemental-Conductor_64.svg
 aws-icons/service/Media-Services/Arch_AWS-Elemental-Delta_64.svg
 aws-icons/service/Media-Services/Arch_AWS-Elemental-Link_64.svg
