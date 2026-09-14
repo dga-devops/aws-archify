@@ -253,7 +253,14 @@ function legendHtml(spec) {
  * @param {object} spec normalized spec
  * @param {'static'|'live'} mode
  */
-export function buildHtml(spec, mode = 'static') {
+/**
+ * @param {object} spec normalized spec
+ * @param {'static'|'live'|'card'} mode
+ * @param {{ loop?: object }} [opts] `loop` adds the seekable looping data-flow
+ *   layer (runtime/loop.js) on top of a static or card page — the source a
+ *   GIF is captured from.
+ */
+export function buildHtml(spec, mode = 'static', opts = {}) {
   const live = mode === 'live';
   const card = mode === 'card';
 
@@ -278,6 +285,7 @@ export function buildHtml(spec, mode = 'static') {
     panelWidth: spec.panel.width,
     motion: live ? spec.motion : { ...spec.motion, animation: 'none' },
     mode,
+    ...(opts.loop ? { loop: { ...(spec.loop || {}), ...opts.loop } } : {}),
   };
 
   const canvasNums = spec.steps
@@ -346,6 +354,7 @@ export function buildHtml(spec, mode = 'static') {
     '</script>',
     '<script>' + runtime('diagram-lib.js') + '</script>',
     live ? '<script>' + runtime('live.js') + '</script>' : '',
+    opts.loop ? '<script>' + runtime('loop.js') + '</script>' : '',
     '</body>',
     '</html>',
     '',

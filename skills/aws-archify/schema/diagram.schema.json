@@ -59,10 +59,23 @@
     "motion": {
       "type": "object",
       "additionalProperties": false,
+      "description": "The finite trace in the live HTML viewer",
       "properties": {
         "animation": { "enum": ["trace", "none"], "default": "trace" },
         "duration": { "type": "number", "default": 2400, "description": "ms for one edge to complete" },
         "stagger": { "type": "number", "default": 160, "description": "ms between consecutive steps" }
+      }
+    },
+    "loop": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The looping GIF. All optional; the defaults suit most diagrams.",
+      "properties": {
+        "travel": { "type": "number", "minimum": 0, "default": 1100, "description": "ms for a packet to cross one arrow" },
+        "hold": { "type": "number", "minimum": 0, "default": 1200, "description": "ms the still diagram is shown before the loop starts" },
+        "overlap": { "type": "number", "minimum": 0, "default": 250, "description": "ms the next step starts before the previous one lands" },
+        "fps": { "type": "number", "minimum": 5, "maximum": 50, "default": 20 },
+        "size": { "type": "number", "minimum": 0, "default": 1.5, "description": "packet and trail scale; raise it when the GIF is viewed small" }
       }
     },
 

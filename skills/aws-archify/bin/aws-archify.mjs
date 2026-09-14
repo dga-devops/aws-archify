@@ -24,9 +24,13 @@ import { buildHtml, CARD } from '../lib/build.mjs';
 import { screenshot, verdict, findBrowser } from '../lib/render.mjs';
 import { searchIcons } from '../lib/icons.mjs';
 import { compareSpecs } from '../lib/diff.mjs';
+import { launchPage } from '../lib/cdp.mjs';
+import { decodePng } from '../lib/png.mjs';
+import { buildPalette, createGifEncoder } from '../lib/gif.mjs';
+import { pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG = '2.2.0';
+const PKG = '2.3.0';
 
 // ---------- tiny arg parser ----------
 const argv = process.argv.slice(2);
@@ -224,6 +228,7 @@ function usage() {
   ${c.bold('deliver')}  <spec.json> [outdir]   render + live + receipt: what you ship
   ${c.bold('diff')}     <before> <after> [dir]  one picture of what changed between two specs
   ${c.bold('card')}     <spec.json> [out.png]  1200x630 share card for a link preview or a post
+  ${c.bold('gif')}      <spec.json> [out.gif]  looping GIF of data flowing through the steps
   ${c.bold('icons')}    <query>                search the 862 bundled AWS icons
   ${c.bold('init')}     [out.json]             a working starter spec
   ${c.bold('doctor')}                          check this machine can render
@@ -232,6 +237,9 @@ function usage() {
   ${c.dim('--dark')}        open the live viewer in dark theme
   ${c.dim('--force')}       write the PNG even when validation fails
   ${c.dim('--no-receipt')}  skip the receipt.json that deliver writes beside its outputs
+  ${c.dim('--width=N')}     gif output width (default 1280; 1200 with --card)
+  ${c.dim('--fps=N')}       gif frame rate, 5-50 (default 20)
+  ${c.dim('--card')}        gif in the 1200x630 share-card frame
   ${c.dim('--json')}        machine-readable output
 `;
 }
@@ -380,6 +388,116 @@ async function cmdCard() {
   process.exit(ok ? 0 : 2);
 }
 
+/**
+ * A looping GIF of data moving through the diagram.
+ *
+ * The page is opened once and seeked frame by frame, so every frame is taken
+ * at an exact time rather than whenever a clock happened to tick. Frames are
+ * encoded as they arrive; only the previous frame's pixels are kept.
+ */
+async function cmdGif() {
+  const { spec, file } = loadSpec(positional[0]);
+  const asCard = !!flags.card;
+  const base = basename(file, extname(file)) + (asCard ? '.card' : '');
+  const out = outPath(positional[1], file.replace(/\.json$/i, '') + (asCard ? '.card' : '') + '.json', '.gif');
+
+  const pageW = asCard ? CARD.width : spec.canvas.width;
+  const pageH = asCard ? CARD.height : spec.canvas.height;
+  const outW = Math.round(Number(flags.width || (asCard ? CARD.width : 1280)));
+  if (!(outW >= 320 && outW <= pageW * 2)) die(`--width must be between 320 and ${pageW * 2}`);
+  const scale = outW / pageW;
+  const outH = Math.round(pageH * scale);
+  const fps = Number(flags.fps || spec.loop?.fps || 20);
+  if (!(fps >= 5 && fps <= 50)) die('--fps must be between 5 and 50');
+  const frameMs = 1000 / fps;
+
+  console.log(c.bold(basename(file)));
+  console.log(c.green('  contract  PASS'));
+
+  // Geometry is checked on the exact page the frames come from.
+  const loopOpts = { autoplay: false };
+  for (const k of ['travel', 'hold', 'overlap']) if (flags[k] !== undefined) loopOpts[k] = Number(flags[k]);
+  const html = buildHtml(spec, asCard ? 'card' : 'static', { loop: loopOpts });
+  const htmlTmp = join(tmpdir(), `aws-archify-${process.pid}.loop.html`);
+  write(htmlTmp, html);
+  const v = await verdict(htmlTmp);
+  const ok = reportVerdict(v);
+  if (!ok && !flags.force) {
+    try { rmSync(htmlTmp); } catch {}
+    console.error('\n' + c.yellow('gif not rendered.') + ' Fix the geometry above, or pass --force.');
+    process.exit(2);
+  }
+
+  const started = Date.now();
+  const page = await launchPage(findBrowser());
+  const cand = candidatePath(out);
+  try {
+    await page.send('Page.enable');
+    await page.send('Emulation.setDeviceMetricsOverride', { width: pageW, height: pageH, deviceScaleFactor: 1, mobile: false });
+    const loaded = page.once('Page.loadEventFired');
+    await page.send('Page.navigate', { url: pathToFileURL(htmlTmp).href });
+    await loaded;
+    const probe = await page.send('Runtime.evaluate', {
+      expression: 'document.fonts.ready.then(() => window.__LOOP__ ? { total: window.__LOOP__.total, phases: window.__LOOP__.phases } : null)',
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    const info = probe.result.value;
+    if (!info) throw new Error('the loop runtime did not start — the page has no arrows to animate?');
+
+    const count = Math.max(1, Math.round(info.total / frameMs));
+    const clip = { x: 0, y: 0, width: pageW, height: pageH, scale };
+
+    async function capture(t) {
+      // seek, then wait two animation frames so the change is painted
+      await page.send('Runtime.evaluate', {
+        expression: `window.__LOOP__.seek(${t}); new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`,
+        awaitPromise: true,
+      });
+      const shot = await page.send('Page.captureScreenshot', { format: 'png', clip, optimizeForSpeed: true, captureBeyondViewport: false });
+      const img = decodePng(Buffer.from(shot.data, 'base64'));
+      if (img.width !== outW || img.height !== outH) {
+        throw new Error(`Chrome returned ${img.width}x${img.height}, expected ${outW}x${outH}`);
+      }
+      return img.data;
+    }
+
+    // Palette from the still frame plus frames mid-flight, so the packet and
+    // trail colours are in it.
+    const sampleTimes = [0];
+    for (let i = 1; i <= 8; i++) sampleTimes.push((info.total * i) / 9);
+    const samples = [];
+    for (const t of sampleTimes) samples.push(await capture(t));
+    const palette = buildPalette(samples);
+
+    const enc = createGifEncoder({ width: outW, height: outH, palette, loop: 0 });
+    for (let i = 0; i < count; i++) {
+      enc.add(await capture(i * frameMs), 100 / fps);
+      if (process.stdout.isTTY && (i % 10 === 0 || i === count - 1)) {
+        process.stdout.write(`\r  frames    ${i + 1}/${count}`);
+      }
+    }
+    if (process.stdout.isTTY) process.stdout.write('\r');
+
+    const bytes = enc.finish();
+    writeFileSync(cand, bytes);
+    commit(cand, out);
+
+    const secs = (enc.durationCs / 100).toFixed(1);
+    console.log(
+      c.green('  wrote     ') + rel(out) +
+      c.dim(`  (${outW}x${outH}, ${secs}s loop, ${info.phases} steps, ${count} frames -> ${enc.frameCount} stored, ${(bytes.length / 1024).toFixed(0)} KB, ${((Date.now() - started) / 1000).toFixed(0)}s to render)`)
+    );
+  } catch (e) {
+    discard(cand);
+    throw e;
+  } finally {
+    await page.close();
+    try { rmSync(htmlTmp); } catch {}
+  }
+  process.exit(ok ? 0 : 2);
+}
+
 async function cmdDiff() {
   const beforeArg = positional[0], afterArg = positional[1];
   if (!beforeArg || !afterArg) die('usage: aws-archify diff <before.json> <after.json> [outdir]');
@@ -484,9 +602,13 @@ function cmdInit() {
 
 async function cmdDoctor() {
   let ok = true;
-  const nodeOk = Number(process.versions.node.split('.')[0]) >= 18;
-  console.log(`  node        ${nodeOk ? c.green(process.version) : c.red(process.version + ' — need >= 18')}`);
-  ok = ok && nodeOk;
+  // 22 is the oldest Node line still supported, and the first with a built-in
+  // WebSocket — which `gif` uses to drive Chrome frame by frame.
+  const nodeOk = Number(process.versions.node.split('.')[0]) >= 22;
+  console.log(`  node        ${nodeOk ? c.green(process.version) : c.red(process.version + ' — need >= 22')}`);
+  const wsOk = typeof WebSocket === 'function';
+  console.log(`  websocket   ${wsOk ? c.green('built in') : c.red('missing — `gif` will not work')}`);
+  ok = ok && nodeOk && wsOk;
   try {
     const b = findBrowser();
     console.log(`  browser     ${c.green(b)}`);
@@ -515,6 +637,7 @@ const table = {
   deliver: cmdDeliver,
   diff: cmdDiff,
   card: cmdCard,
+  gif: cmdGif,
   icons: cmdIcons,
   init: cmdInit,
   doctor: cmdDoctor,

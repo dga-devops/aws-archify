@@ -111,6 +111,8 @@ export function normalize(raw, { file = 'spec' } = {}) {
     canvas: { ...DEFAULTS.canvas, ...(raw.canvas || {}) },
     panel: { ...DEFAULTS.panel, ...(raw.panel || {}) },
     motion: { ...DEFAULTS.motion, ...(raw.motion || {}) },
+    // Timing for the looping GIF. Optional; the runtime has sane defaults.
+    loop: raw.loop ?? null,
     density: raw.density ?? DEFAULTS.density,
     groups: [],
     nodes: [],
@@ -126,6 +128,20 @@ export function normalize(raw, { file = 'spec' } = {}) {
   if (!isNum(spec.panel.width) || spec.panel.width < 0) bad('panel.width: must be a non-negative number');
   if (!['trace', 'none'].includes(spec.motion.animation)) {
     bad(`motion.animation: must be "trace" or "none", got ${JSON.stringify(spec.motion.animation)}`);
+  }
+  if (spec.loop !== null) {
+    if (typeof spec.loop !== 'object' || Array.isArray(spec.loop)) {
+      bad('loop: must be an object like { "travel": 1100, "hold": 1200, "overlap": 250, "fps": 20 }');
+    } else {
+      for (const k of ['travel', 'hold', 'overlap', 'fps', 'size']) {
+        if (spec.loop[k] !== undefined && (!isNum(spec.loop[k]) || spec.loop[k] < 0)) {
+          bad(`loop.${k}: must be a non-negative number`);
+        }
+      }
+      if (spec.loop.fps !== undefined && (spec.loop.fps < 5 || spec.loop.fps > 50)) {
+        bad('loop.fps: must be between 5 and 50 (GIF delays are whole hundredths of a second)');
+      }
+    }
   }
   if (!DENSITY[spec.density]) {
     bad(`density: must be one of ${Object.keys(DENSITY).join(', ')}, got ${JSON.stringify(spec.density)}`);

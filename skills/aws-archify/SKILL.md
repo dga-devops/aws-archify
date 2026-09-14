@@ -1,19 +1,21 @@
 ---
 name: aws-archify
-description: Create or edit AWS Reference Architecture diagrams from a JSON spec. Produces a print-ready 1920x1080 PNG for docs and slides plus an interactive HTML viewer with a signal-flow trace animation, node focus, route tracing and a dark theme. Use whenever asked to draw, update, review or explain an AWS architecture diagram, a VPC/network topology, or a service data flow.
+description: Create or edit AWS Reference Architecture diagrams from a JSON spec. Produces a print-ready 1920x1080 PNG for docs and slides, and on request an interactive HTML viewer (signal-flow trace, node focus, route tracing, dark theme) or a looping animated GIF of data flowing through the steps. Use whenever asked to draw, update, review or explain an AWS architecture diagram, a VPC/network topology, or a service data flow.
 ---
 
 # aws-archify
 
-One JSON spec, two deliverables that can never disagree:
+One JSON spec, several outputs that can never disagree:
 
 | | |
 |---|---|
-| `<name>.png` | 1920×1080, the AWS Reference Architecture format. Goes in docs, slides, PDFs. |
+| `<name>.png` | 1920×1080, the AWS Reference Architecture format. Goes in docs, slides, PDFs. **The default.** |
 | `<name>.live.html` | The same diagram, self-contained, with a finite trace animation, click-to-focus, route tracing, dark theme and print-to-PDF. Share the file; it needs no server. |
+| `<name>.gif` | The same diagram as a looping GIF: packets travel the arrows in step order, forever. For chat, a README, a slide. |
+| `<name>.card.png` | 1200×630 share card for a post or link preview. |
 
-Both come from the same layout engine and the same arrow router, so the moving
-version is the printed version with a clock on it.
+All of them come from the same layout engine and the same arrow router, so a
+moving version is the printed version with a clock on it.
 
 ## The one rule that matters
 
@@ -31,12 +33,13 @@ node $CLI init my-diagram.json          # starter spec
 node $CLI icons "secrets manager"       # find an icon name
 node $CLI validate my-diagram.json      # contract + geometry, writes nothing
 
-node $CLI render   my-diagram.json out/ # PNG only        -> docs, slides, print
-node $CLI live     my-diagram.json out/ # interactive only -> share, explain
-node $CLI deliver  my-diagram.json out/ # both + a receipt
+node $CLI render   my-diagram.json out/ # PNG — the draft, and the default deliverable
+node $CLI live     my-diagram.json out/ # interactive HTML -> share, explain
+node $CLI gif      my-diagram.json out/ # looping animated GIF -> chat, README, slides
+node $CLI card     my-diagram.json out/ # 1200x630 share card -> a post, a link preview
+node $CLI deliver  my-diagram.json out/ # PNG + live HTML + receipt -> commit to a docs repo
 
 node $CLI diff as-is.json to-be.json out/  # one picture of what a proposal changes
-node $CLI card my-diagram.json out/        # 1200x630 share card for a post or link preview
 ```
 
 `validate` and `deliver` exit non-zero when the geometry fails. Each finding is
@@ -61,36 +64,70 @@ A `warning` does not fail the build. `layout/empty-band` means the diagram sits
 in the top half of the page — a short linear flow may legitimately look like
 that; a system overview should not.
 
-### 1. Decide which output to produce
+### 1. PNG first, everything else after approval
 
-Three commands, one spec. Pick from what the diagram is for — the request
-usually says, so read it before asking:
+A diagram is almost never right on the first pass — a wrong icon, a step out
+of order, a layout that reads backwards. The PNG renders in about two seconds
+and is the thing a person actually reviews. A GIF takes fifteen to twenty-five
+seconds. So:
 
-| The user says something like | Command | Produces |
+**Draft as a PNG, and iterate on the PNG.**
+
+```bash
+node $CLI render my-diagram.json out/
+```
+
+Fix, re-render, show again — as many rounds as it takes. Do not produce a GIF
+or a live HTML file during this loop; each would be thrown away at the next fix.
+
+**When the user approves it, offer the other outputs in one line**, because
+most people do not know they exist:
+
+> Want this as an interactive HTML page or an animated GIF as well?
+
+Then produce what they pick. Every output comes from the same spec the user
+just approved, so its content is already right and needs no second review.
+
+| They want it for | Command | Produces |
 |---|---|---|
-| "put it in the doc", "for the slide deck", "attach to the ticket", "print it" | `render` | PNG only |
-| "walk the team through it", "send them something they can click", "explain the flow", "show me how traffic moves" | `live` | interactive HTML only |
-| a plain "draw me a diagram of X", or nothing that hints either way | `deliver` | both |
-| "for the blog post", "for LinkedIn", "a preview image", "og:image" | `card` | 1200×630 PNG @2× |
+| explaining it live, sending something clickable, "show me how traffic moves" | `live` | interactive HTML |
+| Slack, LINE, Teams, a README, a slide, "animated", "moving" | `gif` | looping GIF |
+| a blog post, LinkedIn, a link preview, og:image | `card` | 1200×630 PNG @2× |
+| committing to a docs repository | `deliver` | PNG + live HTML + receipt |
 
-A card is the same diagram framed for a link preview: title on top, the
-drawing scaled to fit, legend and date in the footer, no callout panel. It is
-an addition to `deliver`, not a replacement — the post links to the article,
-the article carries the real PNG.
+Two exceptions:
 
-Two cases where you should stop and ask instead of guessing:
+- **The user names a format up front** ("make me a GIF of…"). Produce that
+  format directly. Still validate; do not insist on a PNG round first.
+- **The diagram already has animated siblings.** When you edit a spec whose
+  `.gif`, `.live.html` or `.card.png` already sits beside its PNG, regenerate
+  those too once the PNG is approved. A stale animated copy that shows the old
+  design is worse than having none.
 
-- **A batch.** Before generating several diagrams at once, ask once which output
-  they want and apply it to all of them. Producing 13 unwanted HTML files is
-  worse than one question.
-- **A repository that commits its outputs.** If the diagrams land in a docs repo
-  or anywhere under version control, ask before adding a second artefact per
-  diagram. Someone has to review and carry those files.
+When you hand over more than one file, say which is which in one line — the
+PNG for the document, the GIF for chat — so nobody wonders why there are three.
 
-Never ask twice in one session: the answer holds until the user changes it.
+### About the GIF
 
-When you do produce both, say which file is which in one line — the PNG for the
-document, the HTML to share — so the user is not left guessing why there are two.
+A GIF supplements the PNG; it does not replace it. It is limited to 256
+colours, so its first frame matches the PNG on 95% of pixels, with the rest on
+the edges of text. For a document that will be printed or zoomed, the PNG
+is the artefact of record.
+
+Every frame is a complete diagram: nothing moves out of place. Packets travel
+the arrows in step order, the running step's badge pulses, and its sentence in
+the callout panel is highlighted. **The first frame is the still diagram, held
+for 1.2 s**, because Slack previews, Confluence, email clients with animation
+off and PDF exports show only the first frame.
+
+```bash
+node $CLI gif my-diagram.json out/                # 1280×720, ~200–400 KB
+node $CLI gif my-diagram.json out/ --width=1920   # full size
+node $CLI gif my-diagram.json out/ --card         # 1200×630, for a post
+```
+
+Timing is tunable per diagram with an optional `loop` block in the spec (see
+the spec reference). `gif` needs Node 22 or newer.
 
 ### 2. Get the facts before drawing
 
@@ -137,7 +174,9 @@ flow reads left→right or top→bottom · step numbers follow the real sequence
   "density": "comfortable",                      // or "compact" for a dense page
   "panel":  { "head": "Proposed changes" },      // optional heading above the steps
   "notes":  "Environment: account 1234…",        // italic note under the steps
-  "motion": { "animation": "trace", "duration": 2400, "stagger": 160 },
+  "motion": { "animation": "trace", "duration": 2400, "stagger": 160 },  // live HTML
+  "loop":   { "travel": 1100, "hold": 1200, "overlap": 250,             // GIF, all optional
+              "fps": 20, "size": 1.5 },
 
   "groups": [ { "kind": "vpc", "label": "VPC — 10.0.0.0/16",
                 "at": [340, 260], "size": [600, 560],
@@ -173,8 +212,14 @@ leave the same side without overlapping: `lam:right:-14` and `lam:right:18`.
 **`mid`** pins the shared middle coordinate of a Z-shaped route when the
 automatic midpoint would collide with something.
 
-**`step`** ties an arrow to a callout number. It orders the trace animation, so
-the signal travels in the sequence the reader is being told about.
+**`step`** ties an arrow to a callout number. It orders the trace animation and
+the GIF loop, so the signal travels in the sequence the reader is being told
+about. Arrows sharing a step move together.
+
+**`loop`** tunes the GIF only: `travel` is milliseconds for a packet to cross
+one arrow, `hold` the opening pause on the still diagram, `overlap` how early
+the next step starts before the previous one lands, `fps` 5–50, and `size`
+scales the packets (raise it when the GIF will be viewed small).
 
 ### Group kinds
 
