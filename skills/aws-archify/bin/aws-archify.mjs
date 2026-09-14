@@ -34,7 +34,7 @@ import { pathToFileURL } from 'node:url';
 import { readdirSync } from 'node:fs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG = '2.5.0';
+const PKG = '2.5.1';
 
 // ---------- tiny arg parser ----------
 const argv = process.argv.slice(2);
@@ -515,6 +515,10 @@ async function cmdGif() {
 const UPLOAD_KEYS = new Set(['name', 'description', 'license', 'allowed-tools', 'compatibility', 'metadata']);
 const SAFE_PATH = /^[A-Za-z0-9._\-/]+$/;
 const PACK_SKIP = /(^|\/)(\.out|node_modules)(\/|$)|\.candidate\./;
+// The uploader's limits. Counting directory entries too, so the check is never
+// looser than whatever the server counts.
+const UPLOAD_MAX_ENTRIES = 200;
+const UPLOAD_MAX_FILE_BYTES = 30 * 1024 * 1024;
 
 /** Keep only frontmatter keys the upload accepts, and add the two that help there. */
 function uploadFrontmatter(md) {
@@ -563,11 +567,33 @@ function cmdPack() {
   if (!/^[a-z0-9-]{1,64}$/.test(fm.name || '')) problems.push('skill name must be 1-64 lowercase letters, digits or hyphens');
   if (!fm.desc || fm.desc.length > 1024) problems.push(`description must be 1-1024 characters (is ${fm.desc?.length ?? 0})`);
 
-  const files = walk(skillDir);
-  for (const f of files) {
+  const all = walk(skillDir);
+  for (const f of all) {
     if (!SAFE_PATH.test(f.rel)) problems.push(`path has characters the upload rejects: ${f.rel}`);
   }
   if (problems.length) die('cannot pack:\n' + problems.map((p) => '  - ' + p).join('\n'));
+
+  // 862 icon files would blow the 200-file limit on their own. They travel as
+  // one JSON map instead, keyed by the same paths index.json uses, holding each
+  // file's exact text; lib/icons.mjs reads from it when it is present.
+  const isIconFile = (rel) => /^aws-icons\/.+\.svg$/.test(rel);
+  const icons = {};
+  for (const f of all) {
+    if (!f.dir && isIconFile(f.rel)) icons[f.rel] = readFileSync(join(skillDir, f.rel), 'utf8');
+  }
+  const iconCount = Object.keys(icons).length;
+  const bundleJson = Buffer.from(
+    JSON.stringify({
+      note: 'The AWS Architecture Icons from aws-icons/, one entry per file, exact text. Built by `aws-archify pack` because Claude chat uploads accept at most 200 files.',
+      count: iconCount,
+      files: icons,
+    }),
+    'utf8'
+  );
+
+  const files = all.filter(
+    (f) => !(f.dir ? /^aws-icons\/./.test(f.rel) : isIconFile(f.rel) || f.rel === 'aws-icons/_filelist.txt')
+  );
 
   const entries = [{ name: `${folder}/` }];
   let bytes = 0;
@@ -577,6 +603,15 @@ function cmdPack() {
     bytes += data.length;
     entries.push({ name: `${folder}/${f.rel}`, data });
   }
+  entries.push({ name: `${folder}/aws-icons/bundle.json`, data: bundleJson });
+  bytes += bundleJson.length;
+
+  const limits = [];
+  if (entries.length > UPLOAD_MAX_ENTRIES) limits.push(`${entries.length} entries, the upload accepts at most ${UPLOAD_MAX_ENTRIES}`);
+  for (const e of entries) {
+    if (e.data && e.data.length > UPLOAD_MAX_FILE_BYTES) limits.push(`${e.name} is ${(e.data.length / 1048576).toFixed(1)} MB, over the 30 MB per-file limit`);
+  }
+  if (limits.length) die('cannot pack:\n' + limits.map((p) => '  - ' + p).join('\n'));
 
   const zip = createZip(entries);
   const cand = candidatePath(out);
@@ -584,8 +619,12 @@ function cmdPack() {
   writeFileSync(cand, zip);
   commit(cand, out);
 
-  const fileCount = files.filter((f) => !f.dir).length;
-  console.log(c.green('wrote ') + rel(out) + c.dim(`  (${fileCount} files, ${(bytes / 1048576).toFixed(1)} MB -> ${(zip.length / 1048576).toFixed(1)} MB zipped)`));
+  const fileCount = entries.filter((e) => e.data).length;
+  console.log(
+    c.green('wrote ') + rel(out) +
+    c.dim(`  (${fileCount} files, ${entries.length}/${UPLOAD_MAX_ENTRIES} entries, ${(bytes / 1048576).toFixed(1)} MB -> ${(zip.length / 1048576).toFixed(1)} MB zipped)`)
+  );
+  console.log(c.dim(`  ${iconCount} icons carried in aws-icons/bundle.json (${(bundleJson.length / 1048576).toFixed(1)} MB) instead of ${iconCount} files`));
   console.log(c.dim(`  root folder "${folder}/" · SKILL.md frontmatter: ${fm.dropped.length ? 'dropped ' + fm.dropped.join(', ') + ' (Claude Code only)' : 'unchanged'}, added license + compatibility`));
   console.log(c.dim('  upload it in Claude: Settings > Capabilities > Skills > Upload skill'));
 }

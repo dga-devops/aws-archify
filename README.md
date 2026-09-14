@@ -79,8 +79,10 @@ ambiguous. Naming a format skips the PNG-first round — you said what you want.
 coding agents. Claude's regular chat takes skills a different way — as a ZIP
 uploaded under **Settings › Capabilities › Skills** — and validates it: the
 skill folder at the root, only the frontmatter keys it knows, no spaces or
-punctuation in file names. GitHub's "Download ZIP" of this repository fails all
-three. Use the one attached to each release instead:
+punctuation in file names, at most 200 files. GitHub's "Download ZIP" of this
+repository fails all four — the icon set alone is 862 files. Use the one
+attached to each release instead, which carries the icons in a single
+`bundle.json` (25 files, under 1 MB):
 
 **[Download aws-archify.zip](https://github.com/dga-devops/aws-archify/releases/latest/download/aws-archify.zip)**
 — then Claude › Settings › Capabilities › Skills › Upload skill.

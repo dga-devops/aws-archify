@@ -7,12 +7,47 @@
  * blank box. Here icons are resolved and inlined at BUILD time, so a bad name is
  * a hard error before any HTML exists and the output is a single portable file.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ICON_ROOT = resolve(HERE, '..', 'aws-icons');
+
+/*
+ * Where the SVG source comes from. In the repository, and wherever `npx
+ * skills add` installed it, each icon is its own file, exactly as AWS ships
+ * them. Claude chat's skill upload accepts at most 200 files, so the ZIP built
+ * by `pack` carries the same 862 files inside one aws-icons/bundle.json
+ * instead. Callers never see the difference.
+ */
+let BUNDLE; // undefined: not looked for yet · null: none, read loose files
+
+function bundle() {
+  if (BUNDLE === undefined) {
+    const p = join(ICON_ROOT, 'bundle.json');
+    BUNDLE = existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')).files : null;
+  }
+  return BUNDLE;
+}
+
+function relOf(path) {
+  return 'aws-icons/' + path.replace(/^aws-icons\//, '');
+}
+
+function iconExists(path) {
+  const b = bundle(), rel = relOf(path);
+  return b ? Object.hasOwn(b, rel) : existsSync(join(ICON_ROOT, rel.slice('aws-icons/'.length)));
+}
+
+export function readIconSource(path) {
+  const b = bundle(), rel = relOf(path);
+  if (b) {
+    if (!Object.hasOwn(b, rel)) throw new Error(`icon file not found in bundle: ${rel}`);
+    return b[rel];
+  }
+  return readFileSync(join(ICON_ROOT, rel.slice('aws-icons/'.length)), 'utf8');
+}
 
 let INDEX = null;
 
@@ -120,14 +155,9 @@ export function resolveIcon(spec) {
   const s = spec.trim();
 
   if (s.endsWith('.svg')) {
-    const rel = s.replace(/^aws-icons\//, '');
-    const full = join(ICON_ROOT, rel);
-    try {
-      readFileSync(full);
-    } catch {
-      throw new Error(`icon file not found: aws-icons/${rel}`);
-    }
-    return { name: rel.split('/').pop().replace(/\.svg$/, ''), path: `aws-icons/${rel}`, full };
+    const rel = relOf(s);
+    if (!iconExists(rel)) throw new Error(`icon file not found: ${rel}`);
+    return { name: rel.split('/').pop().replace(/\.svg$/, ''), path: rel };
   }
 
   let wantType = null;
@@ -179,7 +209,7 @@ export function resolveIcon(spec) {
     }
   }
 
-  return { ...best.e, full: join(ICON_ROOT, best.e.path.replace(/^aws-icons\//, '')) };
+  return { ...best.e };
 }
 
 const inlineCache = new Map();
@@ -187,12 +217,12 @@ const inlineCache = new Map();
 /** The icon's SVG source as a data URI, ready for an <img src>. */
 export function inlineIcon(spec) {
   const hit = resolveIcon(spec);
-  if (inlineCache.has(hit.full)) return { ...hit, dataUri: inlineCache.get(hit.full) };
-  let svg = readFileSync(hit.full, 'utf8');
+  if (inlineCache.has(hit.path)) return { ...hit, dataUri: inlineCache.get(hit.path) };
+  let svg = readIconSource(hit.path);
   // strip XML prolog / comments: they cost bytes in every diagram and add nothing
   svg = svg.replace(/<\?xml[^>]*\?>\s*/g, '').replace(/<!--[\s\S]*?-->/g, '').trim();
   const uri = 'data:image/svg+xml;base64,' + Buffer.from(svg, 'utf8').toString('base64');
-  inlineCache.set(hit.full, uri);
+  inlineCache.set(hit.path, uri);
   return { ...hit, dataUri: uri };
 }
 

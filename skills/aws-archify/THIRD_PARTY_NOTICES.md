@@ -34,6 +34,10 @@ rejects spaces and `&` in paths. The artwork is byte-for-byte unchanged:
 After refreshing the set, run the test suite: it fails on any path with a
 character the upload would reject.
 
+In the ZIP built for Claude chat's skill upload, which accepts at most 200
+files, the same 862 files are carried inside `aws-icons/bundle.json`: one entry
+per file, keyed by its path here, holding the file's exact text.
+
 Icon set release bundled here: **2026-04-30** (see `aws-icons/index.json`).
 
 ## archify
